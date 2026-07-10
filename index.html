@@ -732,7 +732,9 @@ document.getElementById('addItemBtn').addEventListener('click', ()=>{
 });
 
 // ---------- Records / Master save-load ----------
-function download(filename, obj){
+// Old-style fallback: forces a silent download straight into the browser's
+// default Downloads folder, with no location/name picker.
+function downloadFallback(filename, obj){
   const blob = new Blob([JSON.stringify(obj, null, 1)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -741,19 +743,45 @@ function download(filename, obj){
   URL.revokeObjectURL(url);
 }
 
+// Preferred: the browser's native "名前を付けて保存" (Save As) dialog, so the
+// person can choose both the filename AND the folder, like Explorer/Finder.
+// Only Chrome/Edge on desktop support this (File System Access API) — every
+// other browser (Safari, Firefox, any mobile browser) silently falls back to
+// the old forced-download behavior above.
+async function saveWithPicker(filename, obj){
+  const text = JSON.stringify(obj, null, 1);
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{description:'JSONファイル', accept:{'application/json':['.json']}}]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      return true;
+    }catch(err){
+      if(err && err.name === 'AbortError') return false; // person cancelled the dialog
+      // Any other failure (older browser edge case, permission issue, etc.) — fall through to the forced download.
+    }
+  }
+  downloadFallback(filename, JSON.parse(text));
+  return true;
+}
+
 function sanitizeFileName(name){
   return String(name || '').trim().replace(/[\\/:*?"<>|]/g, '_');
 }
 
-document.getElementById('saveRecordBtn').addEventListener('click', ()=>{
+document.getElementById('saveRecordBtn').addEventListener('click', async ()=>{
   const combined = {
     savedAt: new Date().toISOString(),
     date: state.date, staff: state.staff, forecast: state.forecast, items: state.items,
     masterData: DATA
   };
   const base = sanitizeFileName(document.getElementById('saveFileNameInput').value) || (state.date || todayStr());
-  download(`${base}.json`, combined);
-  setStatus('保存しました: ' + base + '.json');
+  const saved = await saveWithPicker(`${base}.json`, combined);
+  if(saved) setStatus('保存しました: ' + base + '.json');
 });
 
 document.getElementById('loadRecordFile').addEventListener('change', e=>{
