@@ -170,6 +170,17 @@ table.sheet-table tr.category-row td{
 table.sheet-table tr.note-row td{font-weight:700;}
 table.sheet-table tr:hover td{background-color:#faf7f0;}
 table.sheet-table tr.category-row:hover td{background:var(--accent-soft);}
+/* 本日ST column is where staff hand-check off items as they're actually
+   prepped "today" — always yellow regardless of the row's own item color
+   (or category/note-row background), on screen AND on the printout, so it
+   stands out as the one column meant to be filled in during use. Placed
+   after (and more specific than) the row-color/category/hover rules above
+   so it always wins. */
+table.sheet-table td.col-today{background:#fff9c4;}
+table.sheet-table tr.category-row td.col-today,
+table.sheet-table tr.note-row td.col-today,
+table.sheet-table tr:hover td.col-today,
+table.sheet-table tr.category-row:hover td.col-today{background:#fff9c4;}
 .add-row-btn{
   margin-top:8px;border:1.5px dashed var(--line);background:#fff;color:var(--ink-soft);
   padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;width:100%;
@@ -622,11 +633,11 @@ function itemRowHtml(station, originalNo){
 
   if(showContent && lookup.isHeader){
     const name = lookup.name || '';
-    return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   if(showContent && lookup.isNote){
     const name = lookup.name || '';
-    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   // Ordinary item row: while No. is still blank (nobody has typed a number
   // into that row yet), show a completely empty row — no name, no
@@ -644,7 +655,7 @@ function itemRowHtml(station, originalNo){
     <td class="col-name"${csItem}><span class="cell-text">${starred}</span></td>
     <td class="col-expiry"${csItem}>${showContent && lookup.expiry ? escapeHtml(String(lookup.expiry)) : ''}</td>
     ${tierCells}
-    <td class="col-today"${csItem}></td>
+    <td class="col-today"></td>
     <td class="col-unit"${csItem}><span class="cell-text">${showContent ? escapeHtml(lookup.unit||'') : ''}</span></td>
     ${rowActionsHtml(station, originalNo)}
   </tr>`;
