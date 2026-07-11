@@ -245,7 +245,7 @@ footer.print-only{display:none;}
    the fit-to-page zoom are accurate even though @media print hasn't engaged yet)
    AND under @media print (fallback for prints triggered without our JS, e.g. Ctrl+P). */
 @media print{
-  @page{ size:A4 portrait; margin:8mm; }
+  @page{ size:A4 portrait; margin:6mm; }
   .app-header, .tabs, .toolbar, .no-print, .sheet-toolbar{display:none !important;}
   main{max-width:100%;padding:0;}
   body{line-height:1.15;padding-bottom:0;margin:0;}
@@ -256,7 +256,11 @@ footer.print-only{display:none;}
   table.sheet-table thead th{position:static;}
   .table-scroll{overflow:visible;}
   body{background:#fff;}
-  footer.print-only{display:block;margin-top:20px;font-size:12px;color:#666;}
+  /* "スタンバイシート仕込みアプリ / 印刷日時" footer removed from print per
+     request — no longer needed, and removing it frees a little extra height
+     for the table itself (fitPrintPage measures actual rendered height, so
+     this is picked up automatically). */
+  footer.print-only{display:none;}
   /* Fix EVERY column to an absolute px width and switch to table-layout:fixed
      (screen editing keeps the normal flexible table-layout:auto). In auto
      layout, CSS max-width on a <td> is only a soft hint — browsers still grow
@@ -292,6 +296,12 @@ footer.print-only{display:none;}
      shrunk per-cell by JS (see shrinkOverflowingCells) instead of wrapping to a
      2nd line, matching the Excel "縮小して全体を表示する" behavior. */
   table.sheet-table td.col-name, table.sheet-table td.tier-col, table.sheet-table td.col-unit{overflow:hidden;}
+  /* On screen, No./賞味期限/基準列/単位 intentionally use a lighter secondary
+     color (--ink-soft) to visually de-emphasize them next to the item name.
+     On paper that reads as faint/hard-to-read, so printing uses the same
+     dark ink and font as ST項目 for every column. */
+  table.sheet-table td{color:var(--ink);font-weight:600;}
+  table.sheet-table td.col-no input{color:var(--ink);font-weight:600;}
   /* 全ページ一括印刷: normally only the active station's panel is shown
      (.panel{display:none} / .panel.active{display:block}, screen rule). While
      printing all pages, every station panel under #stationPanels is forced
@@ -327,7 +337,7 @@ body.print-preview-mode table.sheet-table th, body.print-preview-mode table.shee
 body.print-preview-mode table.sheet-table td.col-no input{padding:1.5px 3px;}
 body.print-preview-mode table.sheet-table thead th{position:static;}
 body.print-preview-mode .table-scroll{overflow:visible;}
-body.print-preview-mode footer.print-only{display:block;margin-top:20px;font-size:12px;color:#666;}
+body.print-preview-mode footer.print-only{display:none;}
 body.print-preview-mode table.sheet-table{table-layout:fixed;width:auto;}
 body.print-preview-mode table.sheet-table td.col-no, body.print-preview-mode table.sheet-table th.col-no{width:50px;min-width:50px;max-width:50px;}
 body.print-preview-mode table.sheet-table td.col-expiry, body.print-preview-mode table.sheet-table th.col-expiry{width:38px;min-width:38px;max-width:38px;}
@@ -345,6 +355,8 @@ body.print-preview-mode .print-page-banner .banner-blank{
   padding:0 4px 1px;text-align:center;
 }
 body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table td.col-unit{overflow:hidden;}
+body.print-preview-mode table.sheet-table td{color:var(--ink);font-weight:600;}
+body.print-preview-mode table.sheet-table td.col-no input{color:var(--ink);font-weight:600;}
 .tabs, .sheet-toolbar, .table-scroll{-webkit-overflow-scrolling:touch;}
 @media (max-width:720px){
   table.sheet-table{font-size:11px;}
@@ -1225,9 +1237,9 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
 });
 
 // ---------- Fit the active station's table onto a single A4 landscape page ----------
-// A4 portrait usable area at 96dpi with 8mm margins on each side (see @page rule above).
-const PRINT_PAGE_WIDTH_PX = Math.round((210 - 16) * 96 / 25.4);
-const PRINT_PAGE_HEIGHT_PX = Math.round((297 - 16) * 96 / 25.4);
+// A4 portrait usable area at 96dpi with 6mm margins on each side (see @page rule above).
+const PRINT_PAGE_WIDTH_PX = Math.round((210 - 12) * 96 / 25.4);
+const PRINT_PAGE_HEIGHT_PX = Math.round((297 - 12) * 96 / 25.4);
 
 function fitPrintPage(){
   const table = document.querySelector('#stationPanels .panel.active table.sheet-table');
@@ -1302,7 +1314,7 @@ function fitPrintPage(){
     // padding is applied pre-zoom (zoom scales it back up), and adds to both the
     // top AND bottom of every th/td, so divide by (scale * rowCount * 2).
     let extraPadPx = extraScaledPx / (scale * rowCount * 2);
-    if(extraPadPx > 10) extraPadPx = 10; // keep very sparse stations looking reasonable, not absurdly tall
+    if(extraPadPx > 40) extraPadPx = 40; // still cap it, so a near-empty station doesn't get absurdly tall rows
     if(extraPadPx > 0){
       table.style.setProperty('--print-extra-pad', extraPadPx + 'px');
     }
@@ -1380,7 +1392,7 @@ function buildPrintBannerHtml(){
   return `<div class="print-page-banner">`
     + `<span class="banner-item">日付　${blank(date,'6.5em')}（${blank(dow,'2.5em')}）</span>`
     + `<span class="banner-item">売上予測　${blank(forecast,'4em')}万円</span>`
-    + `<span class="banner-item">担当者　（${blank(staff,'6em')}）</span>`
+    + `<span class="banner-item">担当者　（${blank(staff,'10em')}）</span>`
     + `</div>`;
 }
 
