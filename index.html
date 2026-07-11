@@ -209,7 +209,14 @@ table.master-table{width:100%;border-collapse:collapse;font-size:13px;}
 table.master-table th, table.master-table td{
   border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:middle;
 }
-table.master-table th{position:sticky;top:calc(var(--sticky-header-h,96px) + var(--master-toolbar-h,56px));background:#fff;font-size:12px;color:var(--ink-soft);z-index:10;}
+table.master-table th{background:#fff;font-size:12px;color:var(--ink-soft);}
+/* table.master-table th was previously position:sticky, meant to stay pinned
+   below the sticky search box while scrolling. Removed: the surrounding
+   .table-scroll wrapper sets overflow-x:auto, which per spec implicitly
+   makes overflow-y 'auto' too (not 'visible'), turning .table-scroll into
+   its own scroll container — so the th's sticky position ended up computed
+   relative to that container instead of the page, landing at a wrong,
+   floating spot part-way down the table instead of staying at the top. */
 table.master-table input[type=text], table.master-table input[type=number]{
   width:100%;min-width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;
   background:#fff;color:var(--ink);
@@ -280,11 +287,19 @@ footer.print-only{display:none;}
      table size itself to the true SUM of its (now fixed) column widths instead,
      which is the same fixed number regardless of viewport or real page width. */
   table.sheet-table{table-layout:fixed;width:auto;}
-  table.sheet-table td.col-no, table.sheet-table th.col-no{width:50px;min-width:50px;max-width:50px;}
-  table.sheet-table td.col-expiry, table.sheet-table th.col-expiry{width:38px;min-width:38px;max-width:38px;}
-  table.sheet-table td.tier-col, table.sheet-table th.tier-col{width:52px;min-width:52px;max-width:52px;}
-  table.sheet-table td.col-today, table.sheet-table th.col-today{width:82px;min-width:82px;max-width:82px;}
-  table.sheet-table td.col-unit, table.sheet-table th.col-unit{width:36px;min-width:36px;max-width:36px;}
+  /* Column widths are all driven by CSS variables (not hardcoded px) — when
+     a table's content is too TALL and needs to shrink (via zoom) to fit one
+     page's height, zoom scales width down too since it's a uniform 2D
+     scale. Left alone, that leaves a blank gap on the right instead of a
+     "パンパン" (packed) full-width print. So fitPrintPage() pre-multiplies
+     every column's width by 1/scale before zoom is applied, so the
+     POST-zoom rendered width still lands exactly on the full page width,
+     regardless of how much the table had to shrink vertically. */
+  table.sheet-table td.col-no, table.sheet-table th.col-no{width:var(--print-col-no-w,58px);min-width:var(--print-col-no-w,58px);max-width:var(--print-col-no-w,58px);}
+  table.sheet-table td.col-expiry, table.sheet-table th.col-expiry{width:var(--print-col-expiry-w,38px);min-width:var(--print-col-expiry-w,38px);max-width:var(--print-col-expiry-w,38px);}
+  table.sheet-table td.tier-col, table.sheet-table th.tier-col{width:var(--print-tier-col-w,52px);min-width:var(--print-tier-col-w,52px);max-width:var(--print-tier-col-w,52px);}
+  table.sheet-table td.col-today, table.sheet-table th.col-today{width:var(--print-col-today-w,82px);min-width:var(--print-col-today-w,82px);max-width:var(--print-col-today-w,82px);}
+  table.sheet-table td.col-unit, table.sheet-table th.col-unit{width:var(--print-col-unit-w,36px);min-width:var(--print-col-unit-w,36px);max-width:var(--print-col-unit-w,36px);}
   /* col-name's width is set dynamically (--col-name-width, computed in
      fitPrintPage) rather than a fixed number, so that after every OTHER
      column is accounted for, col-name absorbs exactly whatever is left to
@@ -339,11 +354,11 @@ body.print-preview-mode table.sheet-table thead th{position:static;}
 body.print-preview-mode .table-scroll{overflow:visible;}
 body.print-preview-mode footer.print-only{display:none;}
 body.print-preview-mode table.sheet-table{table-layout:fixed;width:auto;}
-body.print-preview-mode table.sheet-table td.col-no, body.print-preview-mode table.sheet-table th.col-no{width:50px;min-width:50px;max-width:50px;}
-body.print-preview-mode table.sheet-table td.col-expiry, body.print-preview-mode table.sheet-table th.col-expiry{width:38px;min-width:38px;max-width:38px;}
-body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table th.tier-col{width:52px;min-width:52px;max-width:52px;}
-body.print-preview-mode table.sheet-table td.col-today, body.print-preview-mode table.sheet-table th.col-today{width:82px;min-width:82px;max-width:82px;}
-body.print-preview-mode table.sheet-table td.col-unit, body.print-preview-mode table.sheet-table th.col-unit{width:36px;min-width:36px;max-width:36px;}
+body.print-preview-mode table.sheet-table td.col-no, body.print-preview-mode table.sheet-table th.col-no{width:var(--print-col-no-w,58px);min-width:var(--print-col-no-w,58px);max-width:var(--print-col-no-w,58px);}
+body.print-preview-mode table.sheet-table td.col-expiry, body.print-preview-mode table.sheet-table th.col-expiry{width:var(--print-col-expiry-w,38px);min-width:var(--print-col-expiry-w,38px);max-width:var(--print-col-expiry-w,38px);}
+body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table th.tier-col{width:var(--print-tier-col-w,52px);min-width:var(--print-tier-col-w,52px);max-width:var(--print-tier-col-w,52px);}
+body.print-preview-mode table.sheet-table td.col-today, body.print-preview-mode table.sheet-table th.col-today{width:var(--print-col-today-w,82px);min-width:var(--print-col-today-w,82px);max-width:var(--print-col-today-w,82px);}
+body.print-preview-mode table.sheet-table td.col-unit, body.print-preview-mode table.sheet-table th.col-unit{width:var(--print-col-unit-w,36px);min-width:var(--print-col-unit-w,36px);max-width:var(--print-col-unit-w,36px);}
 body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table th.col-name{width:var(--col-name-width, 335px);min-width:var(--col-name-width, 335px);max-width:var(--col-name-width, 335px);}
 body.print-preview-mode .print-page-banner{
   display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
@@ -509,7 +524,11 @@ function freshState(){
     dayOfWeek: '',
     staff: '',
     forecast: '',
-    activeTab: DATA.stations[0].id,
+    // Starts on the 記録・保存 (records/save) tab, not a station tab — every
+    // station table starts empty by design, so opening straight into a blank
+    // checklist looked broken. The records tab is where a returning user is
+    // most likely to want to start (load today's data or a saved file).
+    activeTab: 'records',
     items: {},
     masterSearchTerm: ''
   };
@@ -687,7 +706,19 @@ function bindPanelEvents(){
     el.addEventListener('change', e=>{
       if(!state.items[station][row]) state.items[station][row] = {enteredNo:String(row), qty:''};
       state.items[station][row].enteredNo = e.target.value.trim();
-      renderStationPanels();
+      // Deferred via setTimeout(...,0), NOT called synchronously: if the user
+      // types a No. then, WITHOUT pressing Enter, clicks the ×(delete)/＋(add)
+      // button on another row, that click's mousedown steals focus and blurs
+      // this input FIRST — firing this 'change' handler synchronously in the
+      // middle of the click gesture. A synchronous renderStationPanels() here
+      // rebuilds the whole table immediately, destroying the button the user
+      // is mid-click on; the browser then has no live element to dispatch the
+      // 'click' event to, so the delete/add silently never fires ("×ボタンが
+      // 機能していない"). Deferring the rebuild to the next tick lets the
+      // in-flight click finish against the still-present old DOM first; the
+      // state (state.items[...].enteredNo, set above) is already correct
+      // either way, so this only delays the *redraw*, not the data update.
+      setTimeout(renderStationPanels, 0);
     });
     el.addEventListener('keydown', e=>{
       if(e.key==='Enter') e.target.blur();
@@ -1260,7 +1291,12 @@ function fitPrintPage(){
   // tier columns, so this is computed per-table rather than a single constant,
   // otherwise a 2-tier station would leave an unfilled gap on the right.
   const tierCount = table.querySelectorAll('thead th.tier-col').length;
-  const OTHER_FIXED_COLS_PX = 50 + 38 + 82 + 36; // col-no + col-expiry + col-today + col-unit
+  // NO_COL_PX is 58, not the visually-tighter 50, because at print font-weight:600
+  // a 3-digit No. (e.g. "145") plus the input's padding+border needs ~51px of
+  // content box just to avoid the browser silently clipping the last digit —
+  // confirmed via scrollWidth(43px) > clientWidth(39px) at 50px column width.
+  const NO_COL_PX = 58;
+  const OTHER_FIXED_COLS_PX = NO_COL_PX + 38 + 82 + 36; // col-no + col-expiry + col-today + col-unit
   const TIER_COL_PX = 52;
   const FULL_PRINT_WIDTH_PX = PRINT_PAGE_WIDTH_PX - 12; // small safety margin off the true ~733px content width
   const colNameWidth = FULL_PRINT_WIDTH_PX - OTHER_FIXED_COLS_PX - (TIER_COL_PX * tierCount);
@@ -1302,6 +1338,22 @@ function fitPrintPage(){
   if(!isFinite(scale) || scale < 0.35) scale = 0.35;
   if(scale > 1) scale = 1;
   table.style.zoom = scale;
+  // zoom scales width down by the same factor it scales height down by — so
+  // a table that needed to shrink vertically to fit the page also ends up
+  // narrower than the full page width, leaving an unwanted gap on the right
+  // ("横幅がパンパンにならない"). Compensate by widening every column BEFORE
+  // zoom by exactly 1/scale, so the POST-zoom (actually printed) width lands
+  // back on the full page width regardless of how much vertical shrink was
+  // needed. table-layout:fixed + nowrap means widening columns doesn't
+  // change row height, so this is safe to do after the height convergence
+  // loop above without invalidating it.
+  const widthComp = 1 / scale;
+  table.style.setProperty('--print-col-no-w', (NO_COL_PX * widthComp) + 'px');
+  table.style.setProperty('--print-col-expiry-w', (38 * widthComp) + 'px');
+  table.style.setProperty('--print-tier-col-w', (TIER_COL_PX * widthComp) + 'px');
+  table.style.setProperty('--print-col-today-w', (82 * widthComp) + 'px');
+  table.style.setProperty('--print-col-unit-w', (36 * widthComp) + 'px');
+  table.style.setProperty('--col-name-width', Math.max(colNameWidth, 200) * widthComp + 'px');
   // A short station (few rows) still leaves blank space below it even at scale 1.
   // Rather than stretching the outer <table> box (which just leaves dead
   // whitespace inside it — browsers don't reliably redistribute that extra height
@@ -1356,6 +1408,11 @@ function resetPrintFit(){
     t.style.height = '';
     t.style.removeProperty('--print-extra-pad');
     t.style.removeProperty('--col-name-width');
+    t.style.removeProperty('--print-col-no-w');
+    t.style.removeProperty('--print-col-expiry-w');
+    t.style.removeProperty('--print-tier-col-w');
+    t.style.removeProperty('--print-col-today-w');
+    t.style.removeProperty('--print-col-unit-w');
     t.querySelectorAll('.cell-text').forEach(span => { span.style.fontSize = ''; });
   });
   document.body.classList.remove('print-preview-mode');
@@ -1480,7 +1537,14 @@ function setStatus(msg){
 // reflects the latest master data (edits, loaded records, reset, etc.).
 function buildItemDatalist(){
   const list = document.getElementById('itemOptions');
-  const nos = Object.keys(DATA.master).map(Number).filter(n => n > 0).sort((a,b)=>a-b);
+  // Many master No.s are unused/reserved slots with no name at all (empty
+  // string) — these used to clutter the No. field's autocomplete with blank-
+  // looking entries. Only offer numbers that actually have a name.
+  const nos = Object.keys(DATA.master).map(Number).filter(n => {
+    if(n <= 0) return false;
+    const item = DATA.master[n];
+    return item && item.name && item.name.trim() !== '';
+  }).sort((a,b)=>a-b);
   list.innerHTML = nos.map(no => {
     const item = DATA.master[no];
     const name = (item && item.name) ? item.name : '';
