@@ -193,6 +193,8 @@ table.sheet-table tr.category-row:hover td{background:var(--accent-soft);}
   gap:6px;
 }
 .btn:hover{background:#faf7f2;}
+.btn:disabled{opacity:0.45;cursor:not-allowed;background:#fff;}
+.btn:disabled:hover{background:#fff;}
 .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
 .btn.primary:hover{background:var(--accent-ink);}
 .btn.danger{color:#a5271b;border-color:#f0c9c2;}
@@ -207,7 +209,7 @@ table.master-table{width:100%;border-collapse:collapse;font-size:13px;}
 table.master-table th, table.master-table td{
   border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:middle;
 }
-table.master-table th{position:sticky;top:0;background:#fff;font-size:12px;color:var(--ink-soft);}
+table.master-table th{position:sticky;top:calc(var(--sticky-header-h,96px) + var(--master-toolbar-h,56px));background:#fff;font-size:12px;color:var(--ink-soft);z-index:10;}
 table.master-table input[type=text], table.master-table input[type=number]{
   width:100%;min-width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;
   background:#fff;color:var(--ink);
@@ -221,7 +223,11 @@ table.master-table select[data-field="color"]{
   width:100%;min-width:84px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;
   font-family:inherit;font-size:12.5px;cursor:pointer;background:#fff;color:var(--ink);
 }
-.master-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.master-toolbar{
+  display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;
+  position:sticky;top:var(--sticky-header-h,96px);z-index:15;
+  background:#fff;padding:8px 0;
+}
 .hint{font-size:12px;color:var(--ink-soft);margin-top:6px;}
 .history-row{
   display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);
@@ -295,12 +301,20 @@ footer.print-only{display:none;}
      this step is purely about visibility + pagination, not sizing. */
   body.print-all-mode #stationPanels .panel{display:block !important;}
   body.print-all-mode #stationPanels .panel:not(:last-child){page-break-after:always;}
-  /* Compact plain-text banner used for BOTH single-page and print-all
-     printing now that .sheet-toolbar itself is hidden during print (see
-     note above printAllPages() in the script for why). */
+  /* Plain-text banner used for BOTH single-page and print-all printing now
+     that .sheet-toolbar itself is hidden during print (see note above
+     printAllPages() in the script for why) — stays as flexible text-flow
+     content (never fixed-px input boxes) so it can never trigger the
+     width-overflow "whole page shrinks" print bug, while still using the
+     full row width and leaving real underlined space to write in by hand. */
   .print-page-banner{
-    display:block;font-size:12px;font-weight:700;color:#333;
-    margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #ccc;
+    display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
+    gap:8px 20px;font-size:15px;font-weight:700;color:#222;
+    margin-bottom:10px;padding:4px 2px 10px;border-bottom:2px solid #333;
+  }
+  .print-page-banner .banner-blank{
+    display:inline-block;border-bottom:1.3px solid #333;
+    padding:0 4px 1px;text-align:center;
   }
 }
 body.print-preview-mode .app-header, body.print-preview-mode .tabs, body.print-preview-mode .toolbar, body.print-preview-mode .no-print, body.print-preview-mode .sheet-toolbar{
@@ -322,8 +336,13 @@ body.print-preview-mode table.sheet-table td.col-today, body.print-preview-mode 
 body.print-preview-mode table.sheet-table td.col-unit, body.print-preview-mode table.sheet-table th.col-unit{width:36px;min-width:36px;max-width:36px;}
 body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table th.col-name{width:var(--col-name-width, 335px);min-width:var(--col-name-width, 335px);max-width:var(--col-name-width, 335px);}
 body.print-preview-mode .print-page-banner{
-  display:block;font-size:12px;font-weight:700;color:#333;
-  margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #ccc;
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
+  gap:8px 20px;font-size:15px;font-weight:700;color:#222;
+  margin-bottom:10px;padding:4px 2px 10px;border-bottom:2px solid #333;
+}
+body.print-preview-mode .print-page-banner .banner-blank{
+  display:inline-block;border-bottom:1.3px solid #333;
+  padding:0 4px 1px;text-align:center;
 }
 body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table td.col-unit{overflow:hidden;}
 .tabs, .sheet-toolbar, .table-scroll{-webkit-overflow-scrolling:touch;}
@@ -424,8 +443,10 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
       <p>ブラウザだけでは自動保存できないため、ファイルとして書き出し・読み込みする方式です。本日の記録(日付・担当者・売上予測・記入内容)とマスタデータ(品目マスタ)をまとめて1つのファイルに保存します。名前を入力してから「保存」を押してください(空欄の場合は日付で保存されます)。</p>
       <div class="master-toolbar">
         <input type="text" id="saveFileNameInput" class="search-box" placeholder="保存する名前(例: 7月10日_刺場)">
-        <button class="btn primary" id="saveRecordBtn">💾 保存(JSON)</button>
-        <label class="btn" for="loadRecordFile">📂 読み込む
+        <button class="btn primary" id="saveAsBtn">💾 名前を付けて保存</button>
+        <button class="btn" id="overwriteSaveBtn" disabled>💾 上書き保存</button>
+        <button class="btn" id="openFileBtn">📂 開く</button>
+        <label class="btn" for="loadRecordFile" style="display:none;">📂 読み込む
           <input type="file" id="loadRecordFile" accept="application/json" style="display:none;">
         </label>
         <button class="btn" id="printBtn">🖨 印刷する</button>
@@ -926,6 +947,21 @@ function downloadFallback(filename, obj){
   URL.revokeObjectURL(url);
 }
 
+// Tracks the file the person most recently opened or "名前を付けて保存"d, so
+// "上書き保存" can write straight back to it without showing a picker again.
+// Only set when the File System Access API actually hands us a real
+// FileSystemFileHandle (Chrome/Edge desktop) — the classic <input type=file>
+// fallback and the forced-download fallback never provide one, so on any
+// other browser 上書き保存 stays disabled and 名前を付けて保存 is the only option.
+let currentFileHandle = null;
+let currentFileName = '';
+
+function updateOverwriteBtnState(){
+  const btn = document.getElementById('overwriteSaveBtn');
+  btn.disabled = !currentFileHandle;
+  btn.title = currentFileHandle ? `上書き保存先: ${currentFileName}` : 'まず「名前を付けて保存」するか「開く」でファイルを選んでください';
+}
+
 // Preferred: the browser's native "名前を付けて保存" (Save As) dialog, so the
 // person can choose both the filename AND the folder, like Explorer/Finder.
 // Only Chrome/Edge on desktop support this (File System Access API) — every
@@ -942,6 +978,9 @@ async function saveWithPicker(filename, obj){
       const writable = await handle.createWritable();
       await writable.write(text);
       await writable.close();
+      currentFileHandle = handle;
+      currentFileName = filename;
+      updateOverwriteBtnState();
       return true;
     }catch(err){
       if(err && err.name === 'AbortError') return false; // person cancelled the dialog
@@ -949,14 +988,74 @@ async function saveWithPicker(filename, obj){
     }
   }
   downloadFallback(filename, JSON.parse(text));
+  // The forced-download path never gives us a handle to write back to later.
+  currentFileHandle = null;
+  currentFileName = filename;
+  updateOverwriteBtnState();
   return true;
+}
+
+// Writes straight back to the file behind currentFileHandle — no picker,
+// no re-typing the filename. Falls back to prompting the person to use
+// 名前を付けて保存 first if no handle is available yet.
+async function overwriteSave(){
+  if(!currentFileHandle){
+    setStatus('上書き保存できるファイルがありません。先に「名前を付けて保存」または「開く」を行ってください。');
+    return;
+  }
+  const combined = {
+    savedAt: new Date().toISOString(),
+    date: state.date, dayOfWeek: state.dayOfWeek, staff: state.staff, forecast: state.forecast, items: state.items,
+    masterData: DATA
+  };
+  try{
+    if(currentFileHandle.requestPermission){
+      const perm = await currentFileHandle.requestPermission({mode:'readwrite'});
+      if(perm !== 'granted'){ setStatus('上書き保存の権限が許可されませんでした。'); return; }
+    }
+    const writable = await currentFileHandle.createWritable();
+    await writable.write(JSON.stringify(combined, null, 1));
+    await writable.close();
+    setStatus('上書き保存しました: ' + currentFileName);
+    const base = sanitizeFileName(document.getElementById('saveFileNameInput').value) || currentFileName.replace(/\.json$/i, '');
+    addToLocalHistory(base, combined);
+  }catch(err){
+    setStatus('上書き保存に失敗しました: ' + err.message);
+  }
+}
+
+// "開く": prefers the File System Access API (captures a handle so 上書き保存
+// works afterward); falls back to the classic <input type=file> picker on
+// browsers without it (Safari, Firefox, mobile) — that path can only ever
+// support 名前を付けて保存 going forward, since it gives no writable handle.
+async function openWithPicker(){
+  if(window.showOpenFilePicker){
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types: [{description:'JSONファイル', accept:{'application/json':['.json']}}]
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      const d = JSON.parse(text);
+      applyLoadedRecord(d);
+      currentFileHandle = handle;
+      currentFileName = file.name;
+      updateOverwriteBtnState();
+      setStatus('読み込みました: ' + file.name + '(上書き保存が使えます)');
+      return;
+    }catch(err){
+      if(err && err.name === 'AbortError') return; // person cancelled
+      // Fall through to the classic file input on any other failure.
+    }
+  }
+  document.getElementById('loadRecordFile').click();
 }
 
 function sanitizeFileName(name){
   return String(name || '').trim().replace(/[\\/:*?"<>|]/g, '_');
 }
 
-document.getElementById('saveRecordBtn').addEventListener('click', async ()=>{
+document.getElementById('saveAsBtn').addEventListener('click', async ()=>{
   const combined = {
     savedAt: new Date().toISOString(),
     date: state.date, dayOfWeek: state.dayOfWeek, staff: state.staff, forecast: state.forecast, items: state.items,
@@ -969,6 +1068,9 @@ document.getElementById('saveRecordBtn').addEventListener('click', async ()=>{
     addToLocalHistory(base, combined);
   }
 });
+
+document.getElementById('overwriteSaveBtn').addEventListener('click', overwriteSave);
+document.getElementById('openFileBtn').addEventListener('click', openWithPicker);
 
 // Shared by both "read a .json file" and "open from this device's local
 // history" — supports 3 shapes: the new combined save (masterData +
@@ -1012,7 +1114,12 @@ document.getElementById('loadRecordFile').addEventListener('change', e=>{
     try{
       const d = JSON.parse(reader.result);
       applyLoadedRecord(d);
-      setStatus('読み込みました: '+file.name);
+      // This classic file-input path never provides a writable handle, so
+      // any previous one is no longer valid to reuse for 上書き保存.
+      currentFileHandle = null;
+      currentFileName = file.name;
+      updateOverwriteBtnState();
+      setStatus('読み込みました: '+file.name+'(この方法では上書き保存は使えません。名前を付けて保存をご利用ください)');
     }catch(err){ setStatus('読み込みに失敗しました: '+err.message); }
   };
   reader.readAsText(file);
@@ -1081,6 +1188,11 @@ function renderLocalHistory(){
       const rec = loadLocalHistory().find(r => r.name === btn.dataset.name);
       if(!rec) return;
       applyLoadedRecord(rec.data);
+      // The local-history copy isn't tied to a real file on disk, so there's
+      // no handle to reuse for 上書き保存 here either.
+      currentFileHandle = null;
+      currentFileName = '';
+      updateOverwriteBtnState();
       setStatus('読み込みました(この端末の履歴): ' + rec.name);
     });
   });
@@ -1104,6 +1216,11 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   document.getElementById('staffInput').value = state.staff;
   document.getElementById('forecastInput').value = state.forecast;
   renderAll();
+  // Discarding back to factory defaults shouldn't leave 上書き保存 pointed at
+  // whatever file happened to be open before the reset.
+  currentFileHandle = null;
+  currentFileName = '';
+  updateOverwriteBtnState();
   setStatus('初期データに戻しました。');
 });
 
@@ -1255,10 +1372,15 @@ function buildPrintBannerHtml(){
   const dow = document.getElementById('dayOfWeekInput').value || '';
   const forecast = document.getElementById('forecastInput').value || '';
   const staff = document.getElementById('staffInput').value || '';
+  // Underline-style blanks (not fixed-px input boxes) so this stays plain
+  // text-flow content — safe from the width-overflow "whole page shrinks"
+  // bug — while still leaving real room to write in by hand when a field is
+  // left blank, not just cramped label text.
+  const blank = (val, minWidth) => `<span class="banner-blank" style="min-width:${minWidth}">${escapeHtml(val)}</span>`;
   return `<div class="print-page-banner">`
-    + `日付：${escapeHtml(date)}${dow ? '（'+escapeHtml(dow)+'）' : ''}`
-    + `　　売上予測：${escapeHtml(forecast)}万円`
-    + `　　担当者：（${escapeHtml(staff)}）`
+    + `<span class="banner-item">日付　${blank(date,'6.5em')}（${blank(dow,'2.5em')}）</span>`
+    + `<span class="banner-item">売上予測　${blank(forecast,'4em')}万円</span>`
+    + `<span class="banner-item">担当者　（${blank(staff,'6em')}）</span>`
     + `</div>`;
 }
 
@@ -1355,12 +1477,30 @@ function buildItemDatalist(){
   }).join('');
 }
 
+// Keeps the master-edit search bar (and the master table's own sticky
+// header, which stacks below it) correctly pinned under the app's sticky
+// top bar (.app-header + .tabs) — measured dynamically rather than
+// hardcoded, since those bars can wrap to a different height on narrow
+// screens.
+function updateStickyOffsets(){
+  const header = document.querySelector('.app-header');
+  const tabs = document.querySelector('.tabs');
+  const toolbar = document.querySelector('.master-toolbar');
+  const headerH = (header ? header.offsetHeight : 0) + (tabs ? tabs.offsetHeight : 0);
+  document.documentElement.style.setProperty('--sticky-header-h', headerH + 'px');
+  if(toolbar){
+    document.documentElement.style.setProperty('--master-toolbar-h', toolbar.offsetHeight + 'px');
+  }
+}
+window.addEventListener('resize', updateStickyOffsets);
+
 function renderAll(){
   buildTabs();
   renderStationPanels();
   renderMasterTable();
   showActivePanel();
   buildItemDatalist();
+  updateStickyOffsets();
 }
 
 // init
@@ -1370,6 +1510,7 @@ document.getElementById('dayOfWeekInput').value = state.dayOfWeek;
 initItemStates();
 renderLocalHistory();
 renderAll();
+updateOverwriteBtnState();
 
 // ---------- Simple PIN lock screen ----------
 // Not real security (this is a public static page — anyone can view-source the
