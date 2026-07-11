@@ -81,12 +81,13 @@ body{
 .sheet-toolbar{
   display:flex;
   flex-wrap:nowrap;
+  justify-content:space-between;
   gap:8px 14px;
   align-items:center;
   background:#fff;
   border:1px solid var(--line);
   border-radius:var(--radius);
-  padding:14px 18px;
+  padding:14px 24px;
   margin:14px 0 10px;
   overflow-x:auto;
 }
@@ -96,19 +97,19 @@ body{
   font-family:inherit;min-width:220px;
 }
 .underline-input{
-  border:none;
-  border-bottom:2px solid var(--ink-soft);
-  border-radius:0;
-  padding:2px 4px;
+  border:1.5px solid var(--line);
+  border-radius:6px;
+  padding:2px 6px;
   font-size:16px;
   font-weight:700;
   font-family:inherit;
-  background:transparent;
+  background:#fff;
   color:var(--ink);
 }
 .underline-input.staff-underline{width:150px;}
 .underline-input.forecast-underline{width:70px;text-align:right;}
 .underline-input.date-underline{width:140px;}
+.underline-input.dow-underline{width:40px;text-align:center;}
 main{max-width:1600px;margin:0 auto;padding:16px 14px 40px;}
 .panel{display:none;}
 .panel.active{display:block;}
@@ -143,7 +144,7 @@ table.sheet-table td.col-no input{
 }
 table.sheet-table td.col-no input.filled{border-color:var(--accent);background:#fff6f1;color:var(--ink);}
 table.sheet-table td.col-no input.not-found{border-color:#c0392b;background:#fdecea;color:#c0392b;}
-table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:64px;min-width:64px;max-width:64px;text-align:center;white-space:nowrap;}
+table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:92px;min-width:92px;max-width:92px;text-align:center;white-space:nowrap;}
 .row-add, .row-del{
   border:1px solid var(--line);background:#fff;color:var(--ink-soft);
   border-radius:5px;width:20px;height:20px;line-height:1;cursor:pointer;font-size:13px;padding:0;
@@ -151,6 +152,11 @@ table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:64px;mi
 .row-add{color:#2e7d32;border-color:#cfe8d0;margin-right:3px;}
 .row-add:hover{background:#eaf7eb;border-color:#a9d8ab;}
 .row-del:hover{background:#fdecea;color:#c0392b;border-color:#f0c9c2;}
+.row-drag{cursor:grab;color:var(--ink-soft);margin-right:3px;}
+.row-drag:active{cursor:grabbing;}
+table.sheet-table tbody tr.dragging{opacity:0.4;}
+table.sheet-table tbody tr.drag-over-top{box-shadow:inset 0 2px 0 0 var(--accent);}
+table.sheet-table tbody tr.drag-over-bottom{box-shadow:inset 0 -2px 0 0 var(--accent);}
 table.sheet-table td.col-name{min-width:300px;font-weight:600;white-space:nowrap;}
 table.sheet-table td.col-name .star{color:var(--accent);}
 table.sheet-table .cell-text{display:inline-block;white-space:nowrap;max-width:100%;vertical-align:middle;}
@@ -215,16 +221,24 @@ table.master-table select[data-field="color"]{
 }
 .master-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
 .hint{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+.history-row{
+  display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.history-row:last-child{border-bottom:none;}
+.history-name{font-weight:700;flex:1 1 auto;min-width:120px;}
+.history-date{color:var(--ink-soft);font-size:12.5px;flex:0 0 auto;}
 .table-scroll{overflow-x:auto;}
 input[type=file]{font-size:12.5px;}
 footer.print-only{display:none;}
+.print-page-banner{display:none;}
 /* Shared "print look" rules. Duplicated under a plain class (applied by JS right
    before window.print(), so getBoundingClientRect() measurements used to compute
    the fit-to-page zoom are accurate even though @media print hasn't engaged yet)
    AND under @media print (fallback for prints triggered without our JS, e.g. Ctrl+P). */
 @media print{
   @page{ size:A4 portrait; margin:8mm; }
-  .app-header, .tabs, .toolbar, .no-print{display:none !important;}
+  .app-header, .tabs, .toolbar, .no-print, .sheet-toolbar{display:none !important;}
   main{max-width:100%;padding:0;}
   body{line-height:1.15;padding-bottom:0;margin:0;}
   table.sheet-table{font-size:9.5px;line-height:1.15;}
@@ -259,13 +273,35 @@ footer.print-only{display:none;}
   table.sheet-table td.tier-col, table.sheet-table th.tier-col{width:52px;min-width:52px;max-width:52px;}
   table.sheet-table td.col-today, table.sheet-table th.col-today{width:82px;min-width:82px;max-width:82px;}
   table.sheet-table td.col-unit, table.sheet-table th.col-unit{width:36px;min-width:36px;max-width:36px;}
-  table.sheet-table td.col-name, table.sheet-table th.col-name{width:335px;min-width:335px;max-width:335px;}
+  /* col-name's width is set dynamically (--col-name-width, computed in
+     fitPrintPage) rather than a fixed number, so that after every OTHER
+     column is accounted for, col-name absorbs exactly whatever is left to
+     make the table's total width fill the full physical page — regardless of
+     how many tier columns (2 or 3) this particular station has. Falls back to
+     335px if the variable hasn't been set yet (e.g. Ctrl+P without our JS). */
+  table.sheet-table td.col-name, table.sheet-table th.col-name{width:var(--col-name-width, 335px);min-width:var(--col-name-width, 335px);max-width:var(--col-name-width, 335px);}
   /* Text stays on one line (no wrap) — cells that don't fit get their font-size
      shrunk per-cell by JS (see shrinkOverflowingCells) instead of wrapping to a
      2nd line, matching the Excel "縮小して全体を表示する" behavior. */
   table.sheet-table td.col-name, table.sheet-table td.tier-col, table.sheet-table td.col-unit{overflow:hidden;}
+  /* 全ページ一括印刷: normally only the active station's panel is shown
+     (.panel{display:none} / .panel.active{display:block}, screen rule). While
+     printing all pages, every station panel under #stationPanels is forced
+     visible regardless of .active, each starting on its own page. Each
+     table's zoom/padding/column widths were already computed and baked in as
+     inline styles beforehand (one station at a time, see printAllPages()), so
+     this step is purely about visibility + pagination, not sizing. */
+  body.print-all-mode #stationPanels .panel{display:block !important;}
+  body.print-all-mode #stationPanels .panel:not(:last-child){page-break-after:always;}
+  /* Compact plain-text banner used for BOTH single-page and print-all
+     printing now that .sheet-toolbar itself is hidden during print (see
+     note above printAllPages() in the script for why). */
+  .print-page-banner{
+    display:block;font-size:12px;font-weight:700;color:#333;
+    margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #ccc;
+  }
 }
-body.print-preview-mode .app-header, body.print-preview-mode .tabs, body.print-preview-mode .toolbar, body.print-preview-mode .no-print{
+body.print-preview-mode .app-header, body.print-preview-mode .tabs, body.print-preview-mode .toolbar, body.print-preview-mode .no-print, body.print-preview-mode .sheet-toolbar{
   display:none !important;
 }
 body.print-preview-mode main{max-width:100%;padding:0;}
@@ -282,11 +318,33 @@ body.print-preview-mode table.sheet-table td.col-expiry, body.print-preview-mode
 body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table th.tier-col{width:52px;min-width:52px;max-width:52px;}
 body.print-preview-mode table.sheet-table td.col-today, body.print-preview-mode table.sheet-table th.col-today{width:82px;min-width:82px;max-width:82px;}
 body.print-preview-mode table.sheet-table td.col-unit, body.print-preview-mode table.sheet-table th.col-unit{width:36px;min-width:36px;max-width:36px;}
-body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table th.col-name{width:335px;min-width:335px;max-width:335px;}
+body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table th.col-name{width:var(--col-name-width, 335px);min-width:var(--col-name-width, 335px);max-width:var(--col-name-width, 335px);}
+body.print-preview-mode .print-page-banner{
+  display:block;font-size:12px;font-weight:700;color:#333;
+  margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #ccc;
+}
 body.print-preview-mode table.sheet-table td.col-name, body.print-preview-mode table.sheet-table td.tier-col, body.print-preview-mode table.sheet-table td.col-unit{overflow:hidden;}
+.tabs, .sheet-toolbar, .table-scroll{-webkit-overflow-scrolling:touch;}
 @media (max-width:720px){
   table.sheet-table{font-size:11px;}
   .table-scroll{overflow-x:auto;}
+  /* Row +/- buttons are only 20x20px by default — comfortable with a mouse
+     pointer but too small to reliably tap on a phone. Enlarge just for
+     touch-sized screens without changing the desktop-editing layout. */
+  .row-add, .row-del{width:32px;height:32px;font-size:16px;}
+  /* Drag-and-drop (HTML5 DnD) has no touch support, so the handle would just
+     be a dead button on a phone — hide it there rather than confuse people,
+     and give the actions column its narrower width back. */
+  .row-drag{display:none;}
+  table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:64px;min-width:64px;max-width:64px;}
+  .btn{padding:11px 16px;font-size:14px;}
+  .tab-btn{padding:14px 14px;}
+  /* Subtle right-edge fade so it's visually obvious there's more to the
+     right when a horizontally-scrollable area doesn't fit the screen. */
+  .tabs, .sheet-toolbar{
+    -webkit-mask-image:linear-gradient(to right, #000 92%, transparent 100%);
+    mask-image:linear-gradient(to right, #000 92%, transparent 100%);
+  }
 }
 #lockScreen{
   position:fixed;inset:0;z-index:9999;background:var(--bg);
@@ -328,7 +386,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
 
 <main>
   <div class="sheet-toolbar" id="sheetToolbar">
-    <span class="banner-text">日付<input type="text" id="dateInput" class="underline-input date-underline" placeholder=""></span>
+    <span class="banner-text">日付<input type="text" id="dateInput" class="underline-input date-underline" placeholder="">（<input type="text" id="dayOfWeekInput" class="underline-input dow-underline" placeholder="">）</span>
     <span class="banner-text">売上予測<input type="text" id="forecastInput" class="underline-input forecast-underline" placeholder="">万円</span>
     <span class="banner-text">担当者（<input type="text" id="staffInput" class="underline-input staff-underline" placeholder="">）</span>
   </div>
@@ -368,9 +426,15 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
           <input type="file" id="loadRecordFile" accept="application/json" style="display:none;">
         </label>
         <button class="btn" id="printBtn">🖨 印刷する</button>
+        <button class="btn" id="printAllBtn">🖨🖨 全ページ一括印刷</button>
         <button class="btn danger" id="resetBtn">↺ 初期データに戻す</button>
       </div>
       <p class="hint" id="statusMsg"></p>
+    </div>
+    <div class="card no-print">
+      <h2>保存データの一覧(この端末のみ)</h2>
+      <p>この端末・このブラウザに残っている直近の保存履歴です(他の端末やブラウザには表示されません、キャッシュを消すと消えます)。ワンタップで読み込めます。</p>
+      <div id="localHistoryList"></div>
     </div>
   </section>
 </main>
@@ -393,6 +457,7 @@ function todayStr(){
 function freshState(){
   return {
     date: '',
+    dayOfWeek: '',
     staff: '',
     forecast: '',
     activeTab: DATA.stations[0].id,
@@ -449,6 +514,7 @@ function noCellHtml(station, originalNo, st, found){
 
 function rowActionsHtml(station, originalNo){
   return `<td class="col-actions no-print">`
+    + `<button type="button" class="row-drag" title="ドラッグして並び替え" draggable="true" data-kind="drag-row" data-station="${station.id}" data-row="${originalNo}">⠿</button>`
     + `<button type="button" class="row-add" title="この下に行を追加" data-kind="insert-row" data-station="${station.id}" data-row="${originalNo}">＋</button>`
     + `<button type="button" class="row-del" title="この行を削除" data-kind="delete-row" data-station="${station.id}" data-row="${originalNo}">×</button>`
     + `</td>`;
@@ -475,11 +541,11 @@ function itemRowHtml(station, originalNo){
 
   if(posItem && posItem.isHeader){
     const name = found ? (lookup.name||'') : '';
-    return `<tr class="category-row"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   if(posItem && posItem.isNote){
     const name = found ? (lookup.name||'') : '';
-    return `<tr class="note-row"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>⚠ ${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>⚠ ${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   const name = found ? escapeHtml(lookup.name||'') : '';
   const starred = name.includes('★') ? name.replace(/★/g, '<span class="star">★</span>') : name;
@@ -487,7 +553,7 @@ function itemRowHtml(station, originalNo){
     const v = found ? lookup.qty[c] : null;
     return `<td class="tier-col"${cs}><span class="cell-text">${escapeHtml(fmtQty(v))}</span></td>`;
   }).join('');
-  return `<tr>
+  return `<tr data-station="${station.id}" data-row="${originalNo}">
     <td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td>
     <td class="col-name"${cs}><span class="cell-text">${starred}</span></td>
     <td class="col-expiry"${cs}>${found && lookup.expiry ? escapeHtml(String(lookup.expiry)) : ''}</td>
@@ -597,6 +663,64 @@ function bindPanelEvents(){
   });
   document.querySelectorAll('[data-kind="print-page"]').forEach(el=>{
     el.addEventListener('click', ()=> printActivePage());
+  });
+  bindRowDragEvents();
+}
+
+// ---------- Row drag-and-drop reordering ----------
+// Uses the native HTML5 drag-and-drop API, initiated only from the ⠿ handle
+// button (not the whole row) so dragging never conflicts with selecting text
+// or focusing the No./quantity inputs. Note: HTML5 drag-and-drop is a
+// mouse-driven API with no built-in touch support, so this only works with a
+// mouse/trackpad (PC) — on a phone, rows stay reorderable via delete+insert.
+let dragState = null;
+
+function bindRowDragEvents(){
+  document.querySelectorAll('[data-kind="drag-row"]').forEach(handle=>{
+    handle.addEventListener('dragstart', e=>{
+      const tr = handle.closest('tr');
+      dragState = { station: handle.dataset.station, row: handle.dataset.row };
+      tr.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try{ e.dataTransfer.setData('text/plain', handle.dataset.row); }catch(err){}
+    });
+    handle.addEventListener('dragend', ()=>{
+      handle.closest('tr')?.classList.remove('dragging');
+      document.querySelectorAll('tr.drag-over-top, tr.drag-over-bottom').forEach(tr=>{
+        tr.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+      dragState = null;
+    });
+  });
+  document.querySelectorAll('table.sheet-table tbody tr').forEach(tr=>{
+    tr.addEventListener('dragover', e=>{
+      if(!dragState || dragState.station !== tr.dataset.station) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = tr.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      tr.classList.toggle('drag-over-top', before);
+      tr.classList.toggle('drag-over-bottom', !before);
+    });
+    tr.addEventListener('dragleave', ()=>{
+      tr.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    tr.addEventListener('drop', e=>{
+      if(!dragState || dragState.station !== tr.dataset.station) return;
+      e.preventDefault();
+      const targetRow = tr.dataset.row;
+      const before = tr.classList.contains('drag-over-top');
+      tr.classList.remove('drag-over-top', 'drag-over-bottom');
+      if(String(targetRow) === String(dragState.row)) return;
+      const st = DATA.stations.find(s=>s.id===dragState.station);
+      const fromIdx = st.order.findIndex(n=>String(n)===String(dragState.row));
+      if(fromIdx < 0) return;
+      const [moved] = st.order.splice(fromIdx, 1);
+      let toIdx = st.order.findIndex(n=>String(n)===String(targetRow));
+      if(toIdx < 0) toIdx = st.order.length;
+      st.order.splice(before ? toIdx : toIdx + 1, 0, moved);
+      renderStationPanels();
+    });
   });
 }
 
@@ -776,13 +900,40 @@ function sanitizeFileName(name){
 document.getElementById('saveRecordBtn').addEventListener('click', async ()=>{
   const combined = {
     savedAt: new Date().toISOString(),
-    date: state.date, staff: state.staff, forecast: state.forecast, items: state.items,
+    date: state.date, dayOfWeek: state.dayOfWeek, staff: state.staff, forecast: state.forecast, items: state.items,
     masterData: DATA
   };
   const base = sanitizeFileName(document.getElementById('saveFileNameInput').value) || (state.date || todayStr());
   const saved = await saveWithPicker(`${base}.json`, combined);
-  if(saved) setStatus('保存しました: ' + base + '.json');
+  if(saved){
+    setStatus('保存しました: ' + base + '.json');
+    addToLocalHistory(base, combined);
+  }
 });
+
+// Shared by both "read a .json file" and "open from this device's local
+// history" — supports 3 shapes: the new combined save (masterData +
+// date/staff/forecast/items), an old master-only export (master/stations at
+// the top level), and an old record-only export (date/staff/forecast/items
+// only, no master/stations).
+function applyLoadedRecord(d){
+  const masterPart = d.masterData || ((d.master && d.stations) ? d : null);
+  if(masterPart){
+    DATA = masterPart;
+    if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
+    initItemStates();
+  }
+  if(d.date !== undefined) state.date = d.date;
+  if(d.dayOfWeek !== undefined) state.dayOfWeek = d.dayOfWeek;
+  if(d.staff !== undefined) state.staff = d.staff;
+  if(d.forecast !== undefined) state.forecast = d.forecast;
+  if(d.items !== undefined) state.items = d.items;
+  document.getElementById('dateInput').value = state.date;
+  document.getElementById('dayOfWeekInput').value = state.dayOfWeek || '';
+  document.getElementById('staffInput').value = state.staff;
+  document.getElementById('forecastInput').value = state.forecast;
+  renderAll();
+}
 
 document.getElementById('loadRecordFile').addEventListener('change', e=>{
   const file = e.target.files[0];
@@ -791,29 +942,86 @@ document.getElementById('loadRecordFile').addEventListener('change', e=>{
   reader.onload = ()=>{
     try{
       const d = JSON.parse(reader.result);
-      // Supports 3 shapes: the new combined save (masterData + date/staff/forecast/items),
-      // an old master-only export (master/stations at the top level), and an old
-      // record-only export (date/staff/forecast/items only, no master/stations).
-      const masterPart = d.masterData || ((d.master && d.stations) ? d : null);
-      if(masterPart){
-        DATA = masterPart;
-        if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
-        initItemStates();
-      }
-      if(d.date !== undefined) state.date = d.date;
-      if(d.staff !== undefined) state.staff = d.staff;
-      if(d.forecast !== undefined) state.forecast = d.forecast;
-      if(d.items !== undefined) state.items = d.items;
-      document.getElementById('dateInput').value = state.date;
-      document.getElementById('staffInput').value = state.staff;
-      document.getElementById('forecastInput').value = state.forecast;
-      renderAll();
+      applyLoadedRecord(d);
       setStatus('読み込みました: '+file.name);
     }catch(err){ setStatus('読み込みに失敗しました: '+err.message); }
   };
   reader.readAsText(file);
   e.target.value = '';
 });
+
+// ---------- Local save history (this browser/device only) ----------
+// Not cloud storage — just a convenience list of recent saves kept in this
+// browser's localStorage, so re-opening a record from the last few days
+// doesn't require hunting through a Downloads folder. It does NOT sync
+// between devices; a genuinely shared, cross-device history would need the
+// Firebase-backed sync discussed earlier.
+const LOCAL_HISTORY_KEY = 'standbyAppSaveHistory_v1';
+const LOCAL_HISTORY_MAX = 30;
+
+function loadLocalHistory(){
+  try{
+    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+
+function addToLocalHistory(name, data){
+  try{
+    let list = loadLocalHistory();
+    list = list.filter(r => r.name !== name); // re-saving the same name replaces the old entry
+    list.unshift({ name, savedAt: new Date().toISOString(), data });
+    if(list.length > LOCAL_HISTORY_MAX) list = list.slice(0, LOCAL_HISTORY_MAX);
+    localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
+  }catch(e){ /* localStorage full or unavailable — silently skip, the JSON file save already succeeded */ }
+  renderLocalHistory();
+}
+
+function removeFromLocalHistory(name){
+  try{
+    const list = loadLocalHistory().filter(r => r.name !== name);
+    localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(list));
+  }catch(e){}
+  renderLocalHistory();
+}
+
+function formatSavedAt(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return iso; }
+}
+
+function renderLocalHistory(){
+  const wrap = document.getElementById('localHistoryList');
+  if(!wrap) return;
+  const list = loadLocalHistory();
+  if(!list.length){
+    wrap.innerHTML = '<p class="hint">まだこの端末に保存履歴がありません。</p>';
+    return;
+  }
+  wrap.innerHTML = list.map(r => `
+    <div class="history-row" data-name="${escapeHtml(r.name)}">
+      <span class="history-name">${escapeHtml(r.name)}</span>
+      <span class="history-date">${escapeHtml(formatSavedAt(r.savedAt))}</span>
+      <button type="button" class="btn" data-kind="history-open" data-name="${escapeHtml(r.name)}">開く</button>
+      <button type="button" class="btn danger" data-kind="history-delete" data-name="${escapeHtml(r.name)}">削除</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-kind="history-open"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rec = loadLocalHistory().find(r => r.name === btn.dataset.name);
+      if(!rec) return;
+      applyLoadedRecord(rec.data);
+      setStatus('読み込みました(この端末の履歴): ' + rec.name);
+    });
+  });
+  wrap.querySelectorAll('[data-kind="history-delete"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('この端末の保存履歴から削除しますか？(ファイル自体は残ります)')) return;
+      removeFromLocalHistory(btn.dataset.name);
+    });
+  });
+}
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('編集内容を破棄して初期データに戻しますか？')) return;
@@ -822,6 +1030,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   state = freshState();
   initItemStates();
   document.getElementById('dateInput').value = state.date;
+  document.getElementById('dayOfWeekInput').value = state.dayOfWeek;
   document.getElementById('staffInput').value = state.staff;
   document.getElementById('forecastInput').value = state.forecast;
   renderAll();
@@ -845,6 +1054,18 @@ function fitPrintPage(){
   table.style.height = '';
   table.style.removeProperty('--print-extra-pad');
   table.style.zoom = 1;
+  // Make the table fill the FULL physical page width, not just the minimum it
+  // needs: every other print column has a small fixed width (just enough for
+  // its short content), and col-name — the one column with genuinely variable-
+  // length content — absorbs whatever's left over. Stations have either 2 or 3
+  // tier columns, so this is computed per-table rather than a single constant,
+  // otherwise a 2-tier station would leave an unfilled gap on the right.
+  const tierCount = table.querySelectorAll('thead th.tier-col').length;
+  const OTHER_FIXED_COLS_PX = 50 + 38 + 82 + 36; // col-no + col-expiry + col-today + col-unit
+  const TIER_COL_PX = 52;
+  const FULL_PRINT_WIDTH_PX = PRINT_PAGE_WIDTH_PX - 12; // small safety margin off the true ~733px content width
+  const colNameWidth = FULL_PRINT_WIDTH_PX - OTHER_FIXED_COLS_PX - (TIER_COL_PX * tierCount);
+  table.style.setProperty('--col-name-width', Math.max(colNameWidth, 200) + 'px');
   // Measure everything the browser will actually paginate on (banner + table +
   // print-only footer + all gaps/margins between them), not just the table's own
   // box — otherwise small unaccounted spacing pushes a sliver onto a 2nd page.
@@ -935,15 +1156,94 @@ function resetPrintFit(){
     t.style.zoom = '';
     t.style.height = '';
     t.style.removeProperty('--print-extra-pad');
+    t.style.removeProperty('--col-name-width');
     t.querySelectorAll('.cell-text').forEach(span => { span.style.fontSize = ''; });
   });
   document.body.classList.remove('print-preview-mode');
+  document.body.classList.remove('print-all-mode');
+  document.querySelectorAll('#stationPanels .print-page-banner').forEach(el => el.remove());
 }
 
-window.addEventListener('beforeprint', fitPrintPage);
+// Print every station, one per page, in a single print job. Each station is
+// fitted ONE AT A TIME (shown alone, exactly like a normal single-page print)
+// so its own fitPrintPage() measurement stays accurate — showing every panel
+// at once first and fitting them all together would break the "measure
+// against just this table's own page budget" math fitPrintPage() relies on.
+// Only once every table already has its zoom/padding/width baked in as inline
+// styles do we reveal all panels together (via print-all-mode) and print.
+// The date/forecast/staff banner (.sheet-toolbar) is a single shared element
+// that sits ABOVE #stationPanels — during a normal single-station print it
+// naturally appears once, above the one visible panel. During 全ページ一括印刷,
+// every station panel is shown at once with a page-break between them, but
+// that shared banner still only physically exists once, so it would only land
+// on page 1. Since inputs' live-typed values aren't reflected by cloning the
+// node (cloneNode copies the HTML attribute, not what the person typed), a
+// plain-text summary is built fresh and inserted at the top of every panel
+// right before printing, then removed again afterwards.
+function buildPrintBannerHtml(){
+  const date = document.getElementById('dateInput').value || '';
+  const dow = document.getElementById('dayOfWeekInput').value || '';
+  const forecast = document.getElementById('forecastInput').value || '';
+  const staff = document.getElementById('staffInput').value || '';
+  return `<div class="print-page-banner">`
+    + `日付：${escapeHtml(date)}${dow ? '（'+escapeHtml(dow)+'）' : ''}`
+    + `　　売上予測：${escapeHtml(forecast)}万円`
+    + `　　担当者：（${escapeHtml(staff)}）`
+    + `</div>`;
+}
+
+async function printAllPages(){
+  const prevActiveTab = state.activeTab;
+  document.getElementById('printTimestamp').textContent = new Date().toLocaleString('ja-JP');
+  for(const station of DATA.stations){
+    state.activeTab = station.id;
+    showActivePanel();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // Insert the banner BEFORE fitPrintPage() measures, so its height is
+    // correctly counted as part of the page's fixed (non-table) height —
+    // otherwise the table would be sized slightly too tall and push over
+    // onto a spurious extra page.
+    const panel = document.querySelector('#stationPanels .panel.active');
+    if(panel && !panel.querySelector('.print-page-banner')){
+      panel.insertAdjacentHTML('afterbegin', buildPrintBannerHtml());
+    }
+    fitPrintPage();
+  }
+  state.activeTab = prevActiveTab;
+  showActivePanel();
+  document.body.classList.add('print-all-mode');
+  window.print();
+}
+
+// The real .sheet-toolbar (boxed date/forecast/staff inputs) is hidden during
+// print entirely — its fixed-width input fields don't shrink to fit the page,
+// and if their combined natural width exceeds the physical A4 content width,
+// Chromium's print engine silently shrinks that WHOLE page to avoid clipping
+// (same root cause as the column-width bug described near the print CSS
+// block above). A compact plain-text banner (buildPrintBannerHtml) is used
+// for both single-page and print-all printing instead, since it can never
+// overflow the page width.
+window.addEventListener('beforeprint', () => {
+  // While print-all-mode is active, every panel has already been fitted
+  // individually by printAllPages(); re-running fitPrintPage() here would
+  // wrongly measure against document.body.scrollHeight with ALL panels
+  // visible at once (instead of just the currently-active one), producing a
+  // tiny incorrect zoom for whichever panel happens to be .active.
+  if(document.body.classList.contains('print-all-mode')) return;
+  document.querySelectorAll('#stationPanels .panel.active').forEach(panel=>{
+    if(!panel.querySelector('.print-page-banner')){
+      panel.insertAdjacentHTML('afterbegin', buildPrintBannerHtml());
+    }
+  });
+  fitPrintPage();
+});
 window.addEventListener('afterprint', resetPrintFit);
 
 function printActivePage(){
+  const panel = document.querySelector('#stationPanels .panel.active');
+  if(panel && !panel.querySelector('.print-page-banner')){
+    panel.insertAdjacentHTML('afterbegin', buildPrintBannerHtml());
+  }
   fitPrintPage();
   window.print();
 }
@@ -953,7 +1253,12 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
   printActivePage();
 });
 
+document.getElementById('printAllBtn').addEventListener('click', ()=>{
+  printAllPages();
+});
+
 document.getElementById('dateInput').addEventListener('change', e=> state.date = e.target.value);
+document.getElementById('dayOfWeekInput').addEventListener('input', e=> state.dayOfWeek = e.target.value);
 document.getElementById('staffInput').addEventListener('input', e=> state.staff = e.target.value);
 document.getElementById('forecastInput').addEventListener('input', e=> state.forecast = e.target.value);
 document.getElementById('masterSearchInput').addEventListener('input', e=>{
@@ -975,7 +1280,9 @@ function renderAll(){
 // init
 state = freshState();
 document.getElementById('dateInput').value = state.date;
+document.getElementById('dayOfWeekInput').value = state.dayOfWeek;
 initItemStates();
+renderLocalHistory();
 renderAll();
 
 // ---------- Simple PIN lock screen ----------
