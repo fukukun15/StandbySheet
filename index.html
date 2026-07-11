@@ -141,9 +141,9 @@ table.sheet-table td.col-no input{
   box-sizing:border-box;
   width:100%;padding:4px 3px;border:1.5px solid var(--line);border-radius:6px;
   font-family:inherit;font-size:12.5px;text-align:center;color:var(--ink-soft);
+  background:#fff;
 }
-table.sheet-table td.col-no input.filled{border-color:var(--accent);background:#fff6f1;color:var(--ink);}
-table.sheet-table td.col-no input.not-found{border-color:#c0392b;background:#fdecea;color:#c0392b;}
+table.sheet-table td.col-no input.filled{background:#fff;color:var(--ink);}
 table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:92px;min-width:92px;max-width:92px;text-align:center;white-space:nowrap;}
 .row-add, .row-del{
   border:1px solid var(--line);background:#fff;color:var(--ink-soft);
@@ -167,10 +167,9 @@ table.sheet-table td.col-today, table.sheet-table th.col-today{width:170px;min-w
 table.sheet-table tr.category-row td{
   background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:12px;
 }
-table.sheet-table tr.note-row td{background:#fff9dc;color:#6b5410;font-weight:700;}
+table.sheet-table tr.note-row td{font-weight:700;}
 table.sheet-table tr:hover td{background-color:#faf7f0;}
 table.sheet-table tr.category-row:hover td{background:var(--accent-soft);}
-table.sheet-table tr.note-row:hover td{background:#fff9dc;}
 .add-row-btn{
   margin-top:8px;border:1.5px dashed var(--line);background:#fff;color:var(--ink-soft);
   padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;width:100%;
@@ -214,6 +213,9 @@ table.master-table input[type=text], table.master-table input[type=number]{
   background:#fff;color:var(--ink);
 }
 table.master-table .name-cell input{min-width:340px;}
+table.master-table .limited-cell{text-align:center;}
+table.master-table .tag-toggle{display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;}
+table.master-table .tag-badge{font-size:11.5px;font-weight:700;color:#6b5410;}
 table.master-table tr.unused-item{opacity:0.42;}
 table.master-table select[data-field="color"]{
   width:100%;min-width:84px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;
@@ -392,6 +394,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
   </div>
 
   <div id="stationPanels"></div>
+  <datalist id="itemOptions"></datalist>
 
   <section class="panel" id="panel-master">
     <div class="card no-print">
@@ -406,7 +409,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
           <thead>
             <tr>
               <th>No.</th><th>品名</th><th>賞味期限</th><th>単位</th>
-              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th>色</th><th></th>
+              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th>色</th><th>期間限定</th><th></th>
             </tr>
           </thead>
           <tbody id="masterTableBody"></tbody>
@@ -447,6 +450,19 @@ const DEFAULT_DATA = {"master":{"1":{"no":1,"name":"刺場","expiry":null,"unit"
 let DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
 if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
 let state = null;
+
+// The 品目マスタ (DATA.master — item names/quantities/expiry/color) always
+// stays fully pre-loaded. But which rows actually show in each station's
+// checklist (DATA.stations[i].order) starts completely empty on every fresh
+// load — no header rows, no ⚠ notes, no item rows. The only way rows appear
+// is via the "＋ 行を追加" button, which pushes new (blank) row ids into
+// order; typing a No. into a row then looks it up against DATA.master as
+// before. This keeps the master catalog intact while making the daily
+// checklist itself a true blank slate every time the page opens.
+function clearStationOrders(){
+  DATA.stations.forEach(s => { s.order = []; });
+}
+clearStationOrders();
 
 function todayStr(){
   const d = new Date();
@@ -508,8 +524,14 @@ function stationColCount(station){
 }
 
 function noCellHtml(station, originalNo, st, found){
-  const cls = !found ? 'not-found' : (st.enteredNo !== String(originalNo) ? 'filled' : '');
-  return `<input type="text" class="${cls}" data-kind="noField" data-station="${station.id}" data-row="${originalNo}" value="${escapeHtml(st.enteredNo)}">`;
+  // A row is a blank/neutral slot purely based on whether its No. field is
+  // empty — NOT whether it happens to equal its own row position number.
+  // (Using "equals originalNo" as the blank signal used to also hide rows
+  // restored from a saved file whose entered No. legitimately matched the
+  // row's position, making loaded records appear to vanish.)
+  const isBlank = st.enteredNo === '';
+  const cls = isBlank ? '' : (found ? 'filled' : 'not-found');
+  return `<input type="text" class="${cls}" data-kind="noField" data-station="${station.id}" data-row="${originalNo}" list="itemOptions" autocomplete="off" value="${escapeHtml(st.enteredNo)}">`;
 }
 
 function rowActionsHtml(station, originalNo){
@@ -529,37 +551,49 @@ function rowColorStyle(lookup){
 }
 
 function itemRowHtml(station, originalNo){
-  const posItem = DATA.master[String(originalNo)];
-  const st = state.items[station.id][originalNo] || {enteredNo:String(originalNo), qty:''};
+  const st = state.items[station.id][originalNo] || {enteredNo:'', qty:''};
+  const isBlank = st.enteredNo === '';
   const lookup = DATA.master[st.enteredNo];
   const found = !!lookup;
+  // What renders is driven ENTIRELY by whatever No. is typed into this row —
+  // never by the row's own original position. This matters once a row's
+  // position happens to be a header/note slot (e.g. loaded from an older
+  // save): typing a different No. into it now correctly swaps in that other
+  // item, instead of the row being permanently stuck showing its original
+  // position's header/note text regardless of what's typed.
+  const showContent = found && !isBlank;
   // applied per-<td> (not on <tr>) so inline style always wins over the row-hover CSS rule
-  const cs = rowColorStyle(lookup);
+  const cs = rowColorStyle(showContent ? lookup : null);
   // category/note rows only span ST項目+賞味期限+基準列 — 本日ST/単位 stay as their own
   // (empty) cells so long banner text can never stretch those columns unevenly per station
   const noteSpan = 2 + station.tierCols.length;
 
-  if(posItem && posItem.isHeader){
-    const name = found ? (lookup.name||'') : '';
+  if(showContent && lookup.isHeader){
+    const name = lookup.name || '';
     return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
-  if(posItem && posItem.isNote){
-    const name = found ? (lookup.name||'') : '';
-    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>⚠ ${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+  if(showContent && lookup.isNote){
+    const name = lookup.name || '';
+    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"${cs}></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
-  const name = found ? escapeHtml(lookup.name||'') : '';
+  // Ordinary item row: while No. is still blank (nobody has typed a number
+  // into that row yet), show a completely empty row — no name, no
+  // quantities, no color — rather than any item. Content appears only once
+  // a No. has actually been entered and matches a non-header/note item.
+  const csItem = showContent ? cs : '';
+  const name = showContent ? escapeHtml(lookup.name||'') : '';
   const starred = name.includes('★') ? name.replace(/★/g, '<span class="star">★</span>') : name;
   const tierCells = station.tierCols.map(c => {
-    const v = found ? lookup.qty[c] : null;
-    return `<td class="tier-col"${cs}><span class="cell-text">${escapeHtml(fmtQty(v))}</span></td>`;
+    const v = showContent ? lookup.qty[c] : null;
+    return `<td class="tier-col"${csItem}><span class="cell-text">${escapeHtml(fmtQty(v))}</span></td>`;
   }).join('');
   return `<tr data-station="${station.id}" data-row="${originalNo}">
-    <td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td>
-    <td class="col-name"${cs}><span class="cell-text">${starred}</span></td>
-    <td class="col-expiry"${cs}>${found && lookup.expiry ? escapeHtml(String(lookup.expiry)) : ''}</td>
+    <td class="col-no"${csItem}>${noCellHtml(station, originalNo, st, found)}</td>
+    <td class="col-name"${csItem}><span class="cell-text">${starred}</span></td>
+    <td class="col-expiry"${csItem}>${showContent && lookup.expiry ? escapeHtml(String(lookup.expiry)) : ''}</td>
     ${tierCells}
-    <td class="col-today"${cs}></td>
-    <td class="col-unit"${cs}><span class="cell-text">${found ? escapeHtml(lookup.unit||'') : ''}</span></td>
+    <td class="col-today"${csItem}></td>
+    <td class="col-unit"${csItem}><span class="cell-text">${showContent ? escapeHtml(lookup.unit||'') : ''}</span></td>
     ${rowActionsHtml(station, originalNo)}
   </tr>`;
 }
@@ -592,7 +626,7 @@ function renderStationPanels(){
     const panel = document.createElement('section');
     panel.className = 'panel' + (state.activeTab===station.id ? ' active' : '');
     panel.id = 'panel-'+station.id;
-    let html = `<div class="toolbar no-print"><span class="hint">${escapeHtml(station.name)}。本日STは空欄です。右側の基準列を参考に数量を記入してください。Noの欄は自由に書き換えられます。</span><button type="button" class="btn print-page-btn" data-kind="print-page">🖨 このページを印刷</button></div>`;
+    let html = `<div class="toolbar no-print"><span class="hint">${escapeHtml(station.name)}。下の「＋ 行を追加」で行を追加し、No.欄にマスタの番号を入力すると品目が表示されます。</span><button type="button" class="btn print-page-btn" data-kind="print-page">🖨 このページを印刷</button></div>`;
     html += stationTableHtml(station);
     panel.innerHTML = html;
     wrap.appendChild(panel);
@@ -789,11 +823,23 @@ function usedMasterNos(){
   return used;
 }
 
+// A limited-time tag forces a yellow highlight in the MASTER EDIT table
+// specifically (per request) — this is independent of, and takes visual
+// priority over, the item's own custom row color in that table. It does
+// NOT affect how the item looks in the station checklists.
+const LIMITED_TIME_COLOR = '#fff59d';
+
+function masterRowStyle(item){
+  const ownColor = item.color || '#ffffff';
+  const displayColor = item.limitedTime ? LIMITED_TIME_COLOR : ownColor;
+  const textColor = textColorFor(displayColor);
+  return `background-color:${escapeHtml(displayColor)};${textColor ? `color:${textColor};` : ''}`;
+}
+
 function masterRowHtml(no, usedNos){
   const item = DATA.master[String(no)];
-  const color = item.color || '#ffffff';
-  const textColor = textColorFor(color);
-  const trStyle = `background-color:${escapeHtml(color)};${textColor ? `color:${textColor};` : ''}`;
+  const ownColor = item.color || '#ffffff';
+  const trStyle = masterRowStyle(item);
   const unused = usedNos && !usedNos.has(String(no));
   return `<tr data-no="${no}" style="${trStyle}"${unused ? ' class="unused-item"' : ''}>
     <td>${no}</td>
@@ -803,7 +849,8 @@ function masterRowHtml(no, usedNos){
     <td><input type="text" data-field="qty0" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[0]))}"></td>
     <td><input type="text" data-field="qty1" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[1]))}"></td>
     <td><input type="text" data-field="qty2" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[2]))}"></td>
-    <td><select data-field="color" data-no="${no}">${colorOptionsHtml(color)}</select></td>
+    <td><select data-field="color" data-no="${no}">${colorOptionsHtml(ownColor)}</select></td>
+    <td class="limited-cell"><label class="tag-toggle" title="期間限定メニュー"><input type="checkbox" data-field="limitedTime" data-no="${no}"${item.limitedTime ? ' checked' : ''}><span class="tag-badge">${item.limitedTime ? '期間限定' : ''}</span></label></td>
     <td><button class="btn danger" data-kind="delete-item" data-no="${no}">削除</button></td>
   </tr>`;
 }
@@ -814,7 +861,7 @@ function bindMasterEvents(){
       const no = e.target.dataset.no;
       const field = e.target.dataset.field;
       const item = DATA.master[no];
-      if(field==='name') item.name = e.target.value;
+      if(field==='name'){ item.name = e.target.value; buildItemDatalist(); }
       else if(field==='expiry') item.expiry = e.target.value;
       else if(field==='unit') item.unit = e.target.value;
       else if(field==='qty0') item.qty[0] = numOrText(e.target.value);
@@ -823,9 +870,21 @@ function bindMasterEvents(){
       else if(field==='color'){
         item.color = e.target.value;
         const tr = e.target.closest('tr');
-        const textColor = textColorFor(item.color);
-        if(tr) tr.style.cssText = `background-color:${item.color};${textColor ? `color:${textColor};` : ''}`;
+        if(tr) tr.style.cssText = masterRowStyle(item);
         renderStationPanels();
+      }
+      else if(field==='limitedTime'){
+        item.limitedTime = e.target.checked;
+        const tr = e.target.closest('tr');
+        if(tr){
+          tr.style.cssText = masterRowStyle(item);
+          const badge = tr.querySelector('.tag-badge');
+          // Text content (not just visibility) is toggled so an unchecked
+          // row never contains the word "期間限定" in the DOM — otherwise
+          // the master search box would match every item, tagged or not.
+          if(badge) badge.textContent = item.limitedTime ? '期間限定' : '';
+        }
+        buildItemDatalist();
       }
     });
   });
@@ -851,7 +910,7 @@ document.getElementById('addItemBtn').addEventListener('click', ()=>{
   if(!name) return;
   const maxNo = Math.max(0, ...Object.keys(DATA.master).map(Number));
   const no = maxNo + 1;
-  DATA.master[String(no)] = {no, name, expiry:'', unit:'', qty:[0,0,0], isHeader:false, isNote:false, color:'#ffffff'};
+  DATA.master[String(no)] = {no, name, expiry:'', unit:'', qty:[0,0,0], isHeader:false, isNote:false, color:'#ffffff', limitedTime:false};
   renderAll();
 });
 
@@ -927,7 +986,17 @@ function applyLoadedRecord(d){
   if(d.dayOfWeek !== undefined) state.dayOfWeek = d.dayOfWeek;
   if(d.staff !== undefined) state.staff = d.staff;
   if(d.forecast !== undefined) state.forecast = d.forecast;
-  if(d.items !== undefined) state.items = d.items;
+  if(d.items !== undefined){
+    // Merge per-station rather than replacing state.items outright — a file
+    // that's missing an entry for some station would otherwise leave
+    // state.items[stationId] undefined and crash rendering. initItemStates()
+    // just above already guarantees every station has at least {}.
+    DATA.stations.forEach(station => {
+      if(d.items[station.id]){
+        state.items[station.id] = Object.assign(state.items[station.id] || {}, d.items[station.id]);
+      }
+    });
+  }
   document.getElementById('dateInput').value = state.date;
   document.getElementById('dayOfWeekInput').value = state.dayOfWeek || '';
   document.getElementById('staffInput').value = state.staff;
@@ -1027,6 +1096,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('編集内容を破棄して初期データに戻しますか？')) return;
   DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
   DATA.nextRowId = -1;
+  clearStationOrders();
   state = freshState();
   initItemStates();
   document.getElementById('dateInput').value = state.date;
@@ -1270,11 +1340,27 @@ function setStatus(msg){
   document.getElementById('statusMsg').textContent = msg;
 }
 
+// Powers the No. field's autocomplete: typing part of an item's name (not
+// just its number) surfaces matching suggestions, so staff don't need to
+// memorize numbers. Rebuilt from DATA.master on every render so it always
+// reflects the latest master data (edits, loaded records, reset, etc.).
+function buildItemDatalist(){
+  const list = document.getElementById('itemOptions');
+  const nos = Object.keys(DATA.master).map(Number).filter(n => n > 0).sort((a,b)=>a-b);
+  list.innerHTML = nos.map(no => {
+    const item = DATA.master[no];
+    const name = (item && item.name) ? item.name : '';
+    const tag = (item && item.limitedTime) ? ' [期間限定]' : '';
+    return `<option value="${escapeHtml(String(no))}" label="${escapeHtml(no + ' ' + name + tag)}">`;
+  }).join('');
+}
+
 function renderAll(){
   buildTabs();
   renderStationPanels();
   renderMasterTable();
   showActivePanel();
+  buildItemDatalist();
 }
 
 // init
