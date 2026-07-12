@@ -60,6 +60,12 @@ body{
   top:56px;
   z-index:19;
 }
+.draft-banner{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:#fff6e0;border-bottom:1px solid #e8d38a;
+  padding:10px 16px;font-size:13.5px;color:#5c4a12;
+}
+.draft-banner span{flex:1 1 260px;}
 .tab-btn{
   border:none;
   background:transparent;
@@ -144,6 +150,14 @@ table.sheet-table td.col-no input{
   background:#fff;
 }
 table.sheet-table td.col-no input.filled{background:#fff;color:var(--ink);}
+/* Same No. entered into two rows of the same table — almost always a
+   mistake, so flag it distinctly from the plain white filled/blank look
+   (unlike the old found/not-found red-border indicator that was removed
+   per feedback, this is a real, actionable warning, so it keeps a visible
+   border + tint on screen). Print keeps it dark ink + bold like every other
+   No. field (see the print rule below) — the border color alone isn't
+   reliable on paper, and duplicates are meant to be caught before printing. */
+table.sheet-table td.col-no input.duplicate{border-color:#e0a020;background:#fff8e6;}
 table.sheet-table td.col-actions, table.sheet-table th.col-actions{width:92px;min-width:92px;max-width:92px;text-align:center;white-space:nowrap;}
 .row-add, .row-del{
   border:1px solid var(--line);background:#fff;color:var(--ink-soft);
@@ -443,6 +457,12 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
 
 <nav class="tabs no-print" id="tabs"></nav>
 
+<div id="draftBanner" class="draft-banner no-print" style="display:none;">
+  <span>前回、保存されていない編集内容が見つかりました(自動下書き)。復元しますか？</span>
+  <button type="button" class="btn primary" id="draftRestoreBtn">復元する</button>
+  <button type="button" class="btn" id="draftDismissBtn">今回は使わない</button>
+</div>
+
 <main>
   <div class="sheet-toolbar" id="sheetToolbar">
     <span class="banner-text">日付<input type="text" id="dateInput" class="underline-input date-underline" placeholder="">（<input type="text" id="dayOfWeekInput" class="underline-input dow-underline" placeholder="">）</span>
@@ -586,15 +606,35 @@ function stationColCount(station){
   return 4 + station.tierCols.length + 1;
 }
 
-function noCellHtml(station, originalNo, st, found){
+function computeDuplicateNos(station){
+  // Same No. typed into two different rows of the same station's table is
+  // almost always a mistake (the same item listed twice) rather than
+  // intentional — flag it so it's easy to spot at a glance, rather than only
+  // noticing when double-checking the printed sheet.
+  const counts = {};
+  station.order.forEach(no => {
+    const st = state.items[station.id] && state.items[station.id][no];
+    const entered = st ? st.enteredNo : '';
+    if(entered === '') return;
+    counts[entered] = (counts[entered] || 0) + 1;
+  });
+  const dups = new Set();
+  Object.keys(counts).forEach(k => { if(counts[k] > 1) dups.add(k); });
+  return dups;
+}
+
+function noCellHtml(station, originalNo, st, found, dupNos){
   // A row is a blank/neutral slot purely based on whether its No. field is
   // empty — NOT whether it happens to equal its own row position number.
   // (Using "equals originalNo" as the blank signal used to also hide rows
   // restored from a saved file whose entered No. legitimately matched the
   // row's position, making loaded records appear to vanish.)
   const isBlank = st.enteredNo === '';
+  const isDup = !isBlank && dupNos && dupNos.has(st.enteredNo);
   const cls = isBlank ? '' : (found ? 'filled' : 'not-found');
-  return `<input type="text" class="${cls}" data-kind="noField" data-station="${station.id}" data-row="${originalNo}" list="itemOptions" autocomplete="off" value="${escapeHtml(st.enteredNo)}">`;
+  const dupCls = isDup ? ' duplicate' : '';
+  const title = isDup ? ' title="この番号は同じ表の中で複数の行に入力されています"' : '';
+  return `<input type="text" class="${cls}${dupCls}" data-kind="noField" data-station="${station.id}" data-row="${originalNo}" list="itemOptions" autocomplete="off" value="${escapeHtml(st.enteredNo)}"${title}>`;
 }
 
 function rowActionsHtml(station, originalNo){
@@ -613,7 +653,7 @@ function rowColorStyle(lookup){
   return '';
 }
 
-function itemRowHtml(station, originalNo){
+function itemRowHtml(station, originalNo, dupNos){
   const st = state.items[station.id][originalNo] || {enteredNo:'', qty:''};
   const isBlank = st.enteredNo === '';
   const lookup = DATA.master[st.enteredNo];
@@ -633,11 +673,11 @@ function itemRowHtml(station, originalNo){
 
   if(showContent && lookup.isHeader){
     const name = lookup.name || '';
-    return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="category-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found, dupNos)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   if(showContent && lookup.isNote){
     const name = lookup.name || '';
-    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
+    return `<tr class="note-row" data-station="${station.id}" data-row="${originalNo}"><td class="col-no"${cs}>${noCellHtml(station, originalNo, st, found, dupNos)}</td><td colspan="${noteSpan}"${cs}>${escapeHtml(name)}</td><td class="col-today"></td><td class="col-unit"${cs}></td>${rowActionsHtml(station, originalNo)}</tr>`;
   }
   // Ordinary item row: while No. is still blank (nobody has typed a number
   // into that row yet), show a completely empty row — no name, no
@@ -651,7 +691,7 @@ function itemRowHtml(station, originalNo){
     return `<td class="tier-col"${csItem}><span class="cell-text">${escapeHtml(fmtQty(v))}</span></td>`;
   }).join('');
   return `<tr data-station="${station.id}" data-row="${originalNo}">
-    <td class="col-no"${csItem}>${noCellHtml(station, originalNo, st, found)}</td>
+    <td class="col-no"${csItem}>${noCellHtml(station, originalNo, st, found, dupNos)}</td>
     <td class="col-name"${csItem}><span class="cell-text">${starred}</span></td>
     <td class="col-expiry"${csItem}>${showContent && lookup.expiry ? escapeHtml(String(lookup.expiry)) : ''}</td>
     ${tierCells}
@@ -665,7 +705,8 @@ function stationTableHtml(station){
   const theadTiers = station.tierCols.map((c, i) => {
     return `<th class="tier-col">${escapeHtml(station.tierLabels[i])}</th>`;
   }).join('');
-  const rows = station.order.map(no => itemRowHtml(station, no)).join('');
+  const dupNos = computeDuplicateNos(station);
+  const rows = station.order.map(no => itemRowHtml(station, no, dupNos)).join('');
   return `<div class="table-scroll"><table class="sheet-table">
     <thead><tr>
       <th class="col-no">No.</th>
@@ -1275,6 +1316,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   currentFileHandle = null;
   currentFileName = '';
   updateOverwriteBtnState();
+  clearDraft();
   setStatus('初期データに戻しました。');
 });
 
@@ -1598,6 +1640,71 @@ initItemStates();
 renderLocalHistory();
 renderAll();
 updateOverwriteBtnState();
+
+// ---------- Auto-draft-save (safety net against an accidentally closed tab) ----------
+// This does NOT change the "always start blank" behavior of freshState()
+// above — a draft is never applied automatically, only offered via a
+// dismissible banner. It exists purely as a recovery option for when the
+// user forgot to explicitly save (💾) today's edits before closing the tab
+// or browser.
+const DRAFT_KEY = 'standbyAppDraft_v1';
+
+function saveDraftNow(){
+  try{
+    const combined = {
+      savedAt: new Date().toISOString(),
+      date: state.date, dayOfWeek: state.dayOfWeek, staff: state.staff, forecast: state.forecast,
+      items: state.items, masterData: DATA
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(combined));
+  }catch(e){ /* storage full/unavailable — silently skip, this is only a convenience safety net */ }
+}
+
+function clearDraft(){
+  try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+}
+
+function draftHasContent(d){
+  if(!d) return false;
+  if(d.date || d.dayOfWeek || d.staff || d.forecast) return true;
+  if(d.items){
+    return Object.values(d.items).some(stationItems =>
+      Object.values(stationItems || {}).some(row => row && row.enteredNo !== '')
+    );
+  }
+  return false;
+}
+
+function checkForDraft(){
+  let raw = null;
+  try{ raw = localStorage.getItem(DRAFT_KEY); }catch(e){}
+  if(!raw) return;
+  let draft = null;
+  try{ draft = JSON.parse(raw); }catch(e){ return; }
+  // Only prompt when the draft actually has something worth recovering —
+  // otherwise (e.g. right after a fresh install, or once the banner was
+  // already dismissed and the interval hasn't written anything meaningful
+  // yet) it would nag on every single page load for no reason.
+  if(!draftHasContent(draft)) return;
+  document.getElementById('draftBanner').style.display = 'flex';
+  document.getElementById('draftRestoreBtn').addEventListener('click', () => {
+    applyLoadedRecord(draft);
+    document.getElementById('draftBanner').style.display = 'none';
+    setStatus('自動下書きから復元しました。');
+  });
+  document.getElementById('draftDismissBtn').addEventListener('click', () => {
+    clearDraft();
+    document.getElementById('draftBanner').style.display = 'none';
+  });
+}
+
+// Periodic save rather than hooking every individual edit path — with No.
+// fields, add/insert/delete-row, master edit fields, drag reorder, and the
+// date/staff/forecast inputs all mutating state separately, wiring each one
+// individually would be easy to miss one of; an unconditional save every
+// few seconds is simpler and can't skip an edit path by accident.
+setInterval(saveDraftNow, 4000);
+checkForDraft();
 
 // ---------- Simple PIN lock screen ----------
 // Not real security (this is a public static page — anyone can view-source the
