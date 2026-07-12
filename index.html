@@ -66,6 +66,39 @@ body{
   padding:10px 16px;font-size:13.5px;color:#5c4a12;
 }
 .draft-banner span{flex:1 1 260px;}
+.preview-exit-bar{
+  position:fixed;top:0;left:0;right:0;z-index:999;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:#2c2c2c;color:#fff;padding:10px 16px;font-size:13.5px;
+}
+.preview-exit-bar span{flex:1 1 260px;}
+.preview-exit-bar .btn{flex:none;}
+/* Pushes the (now print-sized) content down by the exit bar's height so it
+   doesn't start underneath the fixed bar — the bar itself isn't part of the
+   normal document flow, on purpose, so it stays put while the print-preview
+   content scrolls under it. */
+body.preview-active{padding-top:46px;}
+/* The real "show every panel at once" rule for 全ページ一括印刷 only exists
+   under @media print (see the print CSS block below) — it never needs to
+   apply on a normal screen render. previewAllPages() reuses that same
+   print-all-mode class so the OS print dialog still gets the exact right
+   pages if the user prints straight from here, but ALSO needs those panels
+   visible on screen right now (not just once real printing starts) — hence
+   this mirrored rule, deliberately scoped to ONLY when preview-active is
+   ALSO set, so it can't leak into any other screen state. */
+/* Wrapped in @media screen (not left unscoped) so it can NEVER leak into an
+   actual printout even if preview-active happens to still be set while
+   window.print() runs (it stays set until the 'afterprint' event, which
+   fires only after the print/PDF is already generated) — @media print has
+   its own separate, page-break-only version of the "show every panel"
+   rule below; this one is purely a screen convenience with a visible
+   divider instead of an actual page break. */
+@media screen{
+  body.print-all-mode.preview-active #stationPanels .panel{display:block !important;}
+  body.print-all-mode.preview-active #stationPanels .panel:not(:last-child){
+    border-bottom:8px dashed #999;margin-bottom:22px;padding-bottom:6px;
+  }
+}
 .tab-btn{
   border:none;
   background:transparent;
@@ -279,6 +312,12 @@ footer.print-only{display:none;}
 @media print{
   @page{ size:A4 portrait; margin:6mm; }
   .app-header, .tabs, .toolbar, .no-print, .sheet-toolbar{display:none !important;}
+  /* previewExitBar deliberately does NOT carry .no-print (it needs to stay
+     visible ON SCREEN while print-preview-mode is active, which is the
+     whole point of the プレビュー feature) — but that means it needs its
+     own explicit hide here, or it would print for real too. */
+  .preview-exit-bar{display:none !important;}
+  body.preview-active{padding-top:0;}
   main{max-width:100%;padding:0;}
   body{line-height:1.15;padding-bottom:0;margin:0;}
   table.sheet-table{font-size:9.5px;line-height:1.15;}
@@ -463,6 +502,17 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
   <button type="button" class="btn" id="draftDismissBtn">今回は使わない</button>
 </div>
 
+<!-- Deliberately NOT given the .no-print/.toolbar/etc classes that
+     body.print-preview-mode hides — this bar's whole job is to stay visible
+     WHILE that preview look is showing, so the person can tell they're in
+     preview mode and get back out. Fixed-position so it overlays rather
+     than pushing the (already print-sized) content around. -->
+<div id="previewExitBar" class="preview-exit-bar" style="display:none;">
+  <span>🔍 印刷プレビュー中 — 実際の印刷はこのように見えます</span>
+  <button type="button" class="btn primary" id="previewPrintNowBtn">🖨 この内容で印刷する</button>
+  <button type="button" class="btn" id="previewExitBtn">✕ プレビューを閉じる</button>
+</div>
+
 <main>
   <div class="sheet-toolbar" id="sheetToolbar">
     <span class="banner-text">日付<input type="text" id="dateInput" class="underline-input date-underline" placeholder="">（<input type="text" id="dayOfWeekInput" class="underline-input dow-underline" placeholder="">）</span>
@@ -509,6 +559,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         </label>
         <button class="btn" id="printBtn">🖨 印刷する</button>
         <button class="btn" id="printAllBtn">🖨🖨 全ページ一括印刷</button>
+        <button class="btn" id="previewAllBtn">🔍 全ページプレビュー</button>
         <button class="btn danger" id="resetBtn">↺ 初期データに戻す</button>
       </div>
       <p class="hint" id="statusMsg"></p>
@@ -730,7 +781,7 @@ function renderStationPanels(){
     const panel = document.createElement('section');
     panel.className = 'panel' + (state.activeTab===station.id ? ' active' : '');
     panel.id = 'panel-'+station.id;
-    let html = `<div class="toolbar no-print"><span class="hint">${escapeHtml(station.name)}。下の「＋ 行を追加」で行を追加し、No.欄にマスタの番号を入力すると品目が表示されます。</span><button type="button" class="btn print-page-btn" data-kind="print-page">🖨 このページを印刷</button></div>`;
+    let html = `<div class="toolbar no-print"><span class="hint">${escapeHtml(station.name)}。下の「＋ 行を追加」で行を追加し、No.欄にマスタの番号を入力すると品目が表示されます。</span><button type="button" class="btn" data-kind="preview-page">🔍 印刷プレビュー</button><button type="button" class="btn print-page-btn" data-kind="print-page">🖨 このページを印刷</button></div>`;
     html += stationTableHtml(station);
     panel.innerHTML = html;
     wrap.appendChild(panel);
@@ -813,6 +864,9 @@ function bindPanelEvents(){
   });
   document.querySelectorAll('[data-kind="print-page"]').forEach(el=>{
     el.addEventListener('click', ()=> printActivePage());
+  });
+  document.querySelectorAll('[data-kind="preview-page"]').forEach(el=>{
+    el.addEventListener('click', ()=> previewActivePage());
   });
   bindRowDragEvents();
 }
@@ -1569,6 +1623,82 @@ document.getElementById('printBtn').addEventListener('click', ()=>{
 
 document.getElementById('printAllBtn').addEventListener('click', ()=>{
   printAllPages();
+});
+
+// ---------- 印刷プレビュー: show the exact print-fitted look on screen,
+// without opening the OS print dialog ----------
+// Reuses the SAME fitPrintPage()/print-preview-mode machinery that already
+// runs (invisibly, just before window.print()) for real printing — so what
+// the user sees here is guaranteed to be the same layout, zoom, and column
+// widths that will actually print, not a separate approximation that could
+// drift out of sync with the real thing.
+let previewMode = null;
+
+function showPreviewBar(mode){
+  previewMode = mode;
+  document.body.classList.add('preview-active');
+  document.getElementById('previewExitBar').style.display = 'flex';
+}
+
+function exitPrintPreview(){
+  resetPrintFit();
+  document.body.classList.remove('preview-active');
+  document.getElementById('previewExitBar').style.display = 'none';
+  previewMode = null;
+}
+
+function previewActivePage(){
+  document.getElementById('printTimestamp').textContent = new Date().toLocaleString('ja-JP');
+  const panel = document.querySelector('#stationPanels .panel.active');
+  if(!panel){
+    // Nothing to preview from here (no station tab is currently active —
+    // e.g. viewing this from the 記録・保存 tab). Guide the person to a
+    // station's own プレビュー button instead of silently doing nothing.
+    setStatus('プレビューする持ち場のタブを開いてから押してください。');
+    return;
+  }
+  if(!panel.querySelector('.print-page-banner')){
+    panel.insertAdjacentHTML('afterbegin', buildPrintBannerHtml());
+  }
+  fitPrintPage();
+  showPreviewBar('active');
+}
+
+// Same per-station fit loop as printAllPages(), stopping short of
+// window.print() — every panel ends up fitted and visible together (with
+// page-break dividers via print-all-mode), just like the real all-pages
+// print, but browsable on screen first.
+async function previewAllPages(){
+  document.getElementById('printTimestamp').textContent = new Date().toLocaleString('ja-JP');
+  const prevActiveTab = state.activeTab;
+  for(const station of DATA.stations){
+    state.activeTab = station.id;
+    showActivePanel();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const panel = document.querySelector('#stationPanels .panel.active');
+    if(panel && !panel.querySelector('.print-page-banner')){
+      panel.insertAdjacentHTML('afterbegin', buildPrintBannerHtml());
+    }
+    fitPrintPage();
+  }
+  state.activeTab = prevActiveTab;
+  showActivePanel();
+  document.body.classList.add('print-all-mode');
+  showPreviewBar('all');
+}
+
+document.getElementById('previewAllBtn').addEventListener('click', previewAllPages);
+document.getElementById('previewExitBtn').addEventListener('click', exitPrintPreview);
+document.getElementById('previewPrintNowBtn').addEventListener('click', ()=>{
+  window.print();
+});
+// Printing (or cancelling the print dialog) from inside the preview should
+// drop back to the normal editable view afterward, same as a normal print.
+window.addEventListener('afterprint', ()=>{
+  document.body.classList.remove('preview-active');
+  const bar = document.getElementById('previewExitBar');
+  if(bar) bar.style.display = 'none';
+  previewMode = null;
 });
 
 document.getElementById('dateInput').addEventListener('change', e=> state.date = e.target.value);
