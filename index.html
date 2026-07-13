@@ -319,6 +319,12 @@ table.master-table select[data-field="color"]{
 .recipe-add-row input{
   font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
 }
+.recipe-suggest{margin:2px 0 6px;font-size:12.5px;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.recipe-suggest-btn{
+  border:1px dashed var(--accent);background:#fff;color:var(--accent-ink);
+  border-radius:999px;padding:3px 10px;font-size:12.5px;cursor:pointer;
+}
+.recipe-suggest-btn:hover{background:var(--accent-soft);}
 table.forecast-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
 table.forecast-table th, table.forecast-table td{
   border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;
@@ -617,11 +623,13 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
 
     <div class="card no-print">
       <h2>② レシピ表(メニュー ⇔ ST項目の対応)</h2>
-      <p>1つの料理が複数のST項目からできている場合は、必要なST項目を複数行、使用量とあわせて登録してください(例: 焼鳥5種盛 → 対応する各串を1本ずつ)。ST項目は「マスタ編集」タブで登録したNo.で指定します。まだ対応づけていないメニューは出数の多い順に並びます。</p>
+      <p>1つの料理が複数のST項目からできている場合は、必要なST項目を複数行、使用量とあわせて登録してください(例: 焼鳥5種盛 → 対応する各串を1本ずつ)。ST項目は「マスタ編集」タブで登録したNo.で指定します。まだ対応づけていないメニューは出数の多い順に並びます。品名がマスタの品名と似ている場合は「候補」として自動で表示されるので、ワンクリックで採用できます。</p>
       <div class="master-toolbar">
         <input type="text" id="recipeSearchInput" class="search-box" placeholder="🔍 メニュー名で検索" autocomplete="off">
+        <button type="button" class="btn" id="recipeBulkMatchBtn">⚡ 完全一致の候補を一括採用</button>
         <label class="tag-toggle" style="margin-left:auto;"><input type="checkbox" id="recipeUnmappedOnlyChk"> 未設定のみ表示</label>
       </div>
+      <div class="master-toolbar" id="recipeDeptFilter"></div>
       <div id="recipeList"></div>
     </div>
 
@@ -681,6 +689,7 @@ if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
 function ensureDataDefaults(){
   if(!DATA.salesHistory || typeof DATA.salesHistory !== 'object') DATA.salesHistory = {};
   if(!DATA.recipes || typeof DATA.recipes !== 'object') DATA.recipes = {};
+  if(!DATA.recipeDeptFilter || typeof DATA.recipeDeptFilter !== 'object') DATA.recipeDeptFilter = {};
 }
 ensureDataDefaults();
 let state = null;
@@ -2031,22 +2040,118 @@ function allSalesMenuNames(){
   return map;
 }
 
+// ---------- 部門で除外(レシピ対応が不要な部門を丸ごと隠す) ----------
+// ドリンク/のみ放題は仕込みチェックリストと無関係なことが多いので、初めて
+// 見る部門はこの2つだけ既定でOFF(除外)、それ以外は既定でON(表示)とする。
+// 実際のON/OFFはDATA.recipeDeptFilterに永続化するので、一度触ればそれ以降
+// 毎回同じ状態になる(保存ファイル・下書きにも乗る)。
+const DEFAULT_EXCLUDED_DEPTS = ['ドリンク','のみ放題'];
+
+function isDeptIncluded(dept){
+  if(!dept) return true;
+  if(!DATA.recipeDeptFilter) DATA.recipeDeptFilter = {};
+  if(!(dept in DATA.recipeDeptFilter)){
+    DATA.recipeDeptFilter[dept] = !DEFAULT_EXCLUDED_DEPTS.includes(dept);
+  }
+  return DATA.recipeDeptFilter[dept];
+}
+
+function distinctSalesDepts(){
+  const set = new Set();
+  Object.values(DATA.salesHistory).forEach(day => {
+    Object.values(day.items).forEach(it => { if(it.dept) set.add(it.dept); });
+  });
+  return Array.from(set).sort();
+}
+
+function renderRecipeDeptFilter(){
+  const wrap = document.getElementById('recipeDeptFilter');
+  if(!wrap) return;
+  const depts = distinctSalesDepts();
+  if(!depts.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<span class="hint" style="margin-right:4px;">表示する部門:</span>' + depts.map(d => {
+    const checked = isDeptIncluded(d);
+    return `<label class="tag-toggle"><input type="checkbox" data-kind="dept-filter-chk" data-dept="${escapeHtml(d)}"${checked ? ' checked' : ''}> ${escapeHtml(d)}</label>`;
+  }).join('');
+  wrap.querySelectorAll('[data-kind="dept-filter-chk"]').forEach(el => {
+    el.addEventListener('change', () => {
+      if(!DATA.recipeDeptFilter) DATA.recipeDeptFilter = {};
+      DATA.recipeDeptFilter[el.dataset.dept] = el.checked;
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
+}
+
+// ---------- 自動マッチング候補(名前の類似からST項目を提案) ----------
+// POSのメニュー名称とマスタの品名は、"解)★"、"ST)"、"清)" のような接頭辞や
+// 全角スペース・カッコ書きの分量メモがあるかどうかだけが違い、中心の名前は
+// 一致していることが多い。ここではそれらを取り除いた上で完全一致(strong)・
+// 部分一致(weak)を候補として拾う — あくまで「候補」であり、採用は必ず
+// ワンクリックの確認を経る(一括採用ボタンのみ完全一致を自動適用する)。
+function normalizeItemNameForMatch(raw){
+  let s = String(raw || '');
+  s = s.replace(/^[^)）]{0,4}[)）]/, ''); // leading "解)" / "ST)" / "清)" 等の接頭辞
+  s = s.replace(/[★☆●○◎]/g, '');
+  s = s.replace(/[\(（][^)）]*[\)）]/g, ''); // カッコ書きの注記
+  s = s.replace(/[\s　]+/g, '');
+  return s.trim();
+}
+
+function findRecipeMatchCandidates(menuName){
+  const normMenu = normalizeItemNameForMatch(menuName);
+  if(!normMenu) return [];
+  const candidates = [];
+  Object.keys(DATA.master).forEach(noStr => {
+    const item = DATA.master[noStr];
+    if(!item || item.isHeader || item.isNote || !item.name) return;
+    const normItem = normalizeItemNameForMatch(item.name);
+    if(!normItem) return;
+    let score = 0;
+    if(normItem === normMenu) score = 3;
+    else if(normMenu.length >= 2 && (normItem.includes(normMenu) || normMenu.includes(normItem))) score = 2;
+    if(score > 0) candidates.push({no:Number(noStr), name:item.name, score});
+  });
+  candidates.sort((a,b) => b.score - a.score || a.no - b.no);
+  return candidates.slice(0,3);
+}
+
+// 現在絞り込み条件に合致する「未設定」メニューのうち、完全一致(score 3)の
+// 候補があるものだけを自動で採用する。部分一致は誤爆の可能性があるため対象外。
+function bulkApplyExactSuggestions(){
+  const menuMap = allSalesMenuNames();
+  let applied = 0;
+  Object.keys(menuMap).forEach(name => {
+    if(DATA.recipes[name] && DATA.recipes[name].length) return;
+    if(!isDeptIncluded(menuMap[name].dept)) return;
+    const candidates = findRecipeMatchCandidates(name);
+    const exact = candidates.find(c => c.score === 3);
+    if(exact){
+      DATA.recipes[name] = [{no:exact.no, qty:1}];
+      applied++;
+    }
+  });
+  return applied;
+}
+
 const RECIPE_LIST_LIMIT = 80;
 
 function renderRecipeList(){
   const container = document.getElementById('recipeList');
   if(!container) return;
+  renderRecipeDeptFilter();
   const searchInput = document.getElementById('recipeSearchInput');
   const unmappedChk = document.getElementById('recipeUnmappedOnlyChk');
   const searchTerm = searchInput ? searchInput.value.trim() : '';
   const unmappedOnly = unmappedChk ? unmappedChk.checked : false;
   const menuMap = allSalesMenuNames();
   let names = Object.keys(menuMap);
+  names = names.filter(n => isDeptIncluded(menuMap[n].dept));
   if(searchTerm) names = names.filter(n => n.includes(searchTerm));
   if(unmappedOnly) names = names.filter(n => !DATA.recipes[n] || DATA.recipes[n].length === 0);
   names.sort((a,b) => menuMap[b].totalQty - menuMap[a].totalQty);
   if(!names.length){
-    container.innerHTML = '<p class="hint">該当するメニューがありません。まずCSVを取り込んでください。</p>';
+    container.innerHTML = '<p class="hint">該当するメニューがありません。まずCSVを取り込んでください(部門の表示設定もご確認ください)。</p>';
     return;
   }
   const shown = names.slice(0, RECIPE_LIST_LIMIT);
@@ -2062,12 +2167,22 @@ function recipeRowHtml(name, info){
     const itemName = item ? item.name : '(不明な品番)';
     return `<span class="recipe-chip">No.${m.no} ${escapeHtml(itemName)} ×${escapeHtml(fmtQty(m.qty))}<button type="button" class="recipe-chip-del" data-kind="recipe-del" data-menu="${escapeHtml(name)}" data-idx="${i}" title="この対応づけを削除">×</button></span>`;
   }).join('');
+  let suggestHtml = '';
+  if(!mappings.length){
+    const candidates = findRecipeMatchCandidates(name);
+    if(candidates.length){
+      suggestHtml = `<div class="recipe-suggest">候補: ` + candidates.map(c =>
+        `<button type="button" class="recipe-suggest-btn" data-kind="recipe-suggest-btn" data-menu="${escapeHtml(name)}" data-no="${c.no}">No.${c.no} ${escapeHtml(c.name)}${c.score===3 ? '(完全一致)' : ''} を採用</button>`
+      ).join('') + `</div>`;
+    }
+  }
   return `<div class="recipe-row">
     <div class="recipe-row-head">
       <span class="recipe-name">${escapeHtml(name)}</span>
       <span class="recipe-qty-badge">合計出数 ${fmtQty(info.totalQty)}${info.dept ? ' / ' + escapeHtml(info.dept) : ''}</span>
     </div>
     <div class="recipe-chips">${chipsHtml || '<span class="hint">未設定</span>'}</div>
+    ${suggestHtml}
     <div class="recipe-add-row">
       <input type="text" class="recipe-add-no" data-kind="recipe-add-no" data-menu="${escapeHtml(name)}" list="itemOptions" placeholder="No.(ST項目)" autocomplete="off">
       <input type="text" class="recipe-add-qty" data-kind="recipe-add-qty" data-menu="${escapeHtml(name)}" placeholder="使用量(例:1)" autocomplete="off">
@@ -2085,6 +2200,16 @@ function bindRecipeEvents(){
         DATA.recipes[menu].splice(idx,1);
         if(!DATA.recipes[menu].length) delete DATA.recipes[menu];
       }
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
+  document.querySelectorAll('[data-kind="recipe-suggest-btn"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const menu = el.dataset.menu;
+      const no = Number(el.dataset.no);
+      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
+      DATA.recipes[menu].push({no, qty:1});
       renderRecipeList();
       renderForecastResult();
     });
@@ -2192,6 +2317,7 @@ function computeForecast(){
   });
   Object.keys(menuAvg).forEach(name => { menuAvg[name] = menuAvg[name] / refDateKeys.length; });
 
+  const menuDeptMap = allSalesMenuNames();
   const stTotals = {};
   const unmapped = [];
   Object.keys(menuAvg).forEach(name => {
@@ -2200,7 +2326,12 @@ function computeForecast(){
     if(recipe && recipe.length){
       recipe.forEach(m => { stTotals[m.no] = (stTotals[m.no]||0) + predictedQty * m.qty; });
     } else if(predictedQty > 0){
-      unmapped.push({name, qty:predictedQty});
+      // 除外した部門(既定でドリンク/のみ放題)は、そもそも仕込みチェックリスト
+      // と無関係なことが多いので「未設定」警告にも出さない — ②レシピ表の
+      // 表示設定と揃えることで、レシピ表で隠したメニューが計算結果側では
+      // 警告として復活してしまう食い違いを防ぐ。
+      const dept = menuDeptMap[name] ? menuDeptMap[name].dept : '';
+      if(isDeptIncluded(dept)) unmapped.push({name, qty:predictedQty});
     }
   });
   unmapped.sort((a,b) => b.qty - a.qty);
@@ -2286,6 +2417,13 @@ const recipeSearchInputEl = document.getElementById('recipeSearchInput');
 if(recipeSearchInputEl) recipeSearchInputEl.addEventListener('input', renderRecipeList);
 const recipeUnmappedOnlyChkEl = document.getElementById('recipeUnmappedOnlyChk');
 if(recipeUnmappedOnlyChkEl) recipeUnmappedOnlyChkEl.addEventListener('change', renderRecipeList);
+const recipeBulkMatchBtnEl = document.getElementById('recipeBulkMatchBtn');
+if(recipeBulkMatchBtnEl) recipeBulkMatchBtnEl.addEventListener('click', () => {
+  const applied = bulkApplyExactSuggestions();
+  setStatus(applied > 0 ? `${applied}件のメニューに完全一致の候補を自動で採用しました。内容を確認してください。` : '完全一致の候補が見つかりませんでした。');
+  renderRecipeList();
+  renderForecastResult();
+});
 
 renderForecastInputArea();
 
