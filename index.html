@@ -313,12 +313,31 @@ table.master-table select[data-field="color"]{
   border:none;background:none;cursor:pointer;color:#a5271b;font-weight:700;font-size:13px;
   line-height:1;padding:0 0 0 2px;
 }
+.recipe-chip-qty{
+  width:44px;font-size:12.5px;padding:1px 4px;border:1px solid var(--line);border-radius:4px;
+  text-align:center;background:#fff;
+}
+.recipe-qty-presets{display:inline-flex;gap:3px;}
+.recipe-preset-btn{
+  border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 9px;
+  font-size:12.5px;cursor:pointer;color:var(--ink-soft);
+}
+.recipe-preset-btn:hover{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent-soft);}
 .recipe-add-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .recipe-add-row .recipe-add-no{width:110px;}
 .recipe-add-row .recipe-add-qty{width:110px;}
 .recipe-add-row input{
   font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
 }
+.recipe-multi-picker{
+  margin-top:8px;padding:10px;border:1px dashed var(--accent-soft);border-radius:8px;background:#fbf9f5;
+}
+.recipe-multi-search-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
+.recipe-multi-search-row .recipe-multi-search{flex:1 1 220px;}
+.recipe-multi-qty{width:50px;font-size:13px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;margin-left:6px;}
+.recipe-multi-list{display:flex;flex-wrap:wrap;gap:3px 16px;max-height:220px;overflow-y:auto;}
+.recipe-multi-item{display:flex;align-items:center;gap:5px;font-size:13px;padding:2px 0;white-space:nowrap;}
+.recipe-multi-item.already-mapped{opacity:0.5;}
 .recipe-suggest{margin:2px 0 6px;font-size:12.5px;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
 .recipe-suggest-btn{
   border:1px dashed var(--accent);background:#fff;color:var(--accent-ink);
@@ -584,7 +603,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
           <thead>
             <tr>
               <th>No.</th><th>品名</th><th>賞味期限</th><th>単位</th>
-              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th>色</th><th>期間限定</th><th></th>
+              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th title="予想仕込みタブで「必要パック数」を計算する際に使います(例: もも串が1パック50本入りなら50と入力)">1パックの数量</th><th>色</th><th>期間限定</th><th></th>
             </tr>
           </thead>
           <tbody id="masterTableBody"></tbody>
@@ -640,7 +659,16 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
     </div>
 
     <div class="card no-print">
-      <h2>③ 予想仕込みを計算</h2>
+      <h2>③ ST項目からメニューを逆引き</h2>
+      <p>ST項目のNo.を指定すると、そのNo.が使われているメニューと使用量の一覧を表示します(このNo.を減らしたい・見直したい時にどのメニューに影響するか確認できます)。</p>
+      <div class="master-toolbar">
+        <input type="text" id="reverseLookupNoInput" class="search-box" list="itemOptions" placeholder="No.を入力(例:145)" autocomplete="off">
+      </div>
+      <div id="reverseLookupResult"></div>
+    </div>
+
+    <div class="card no-print">
+      <h2>④ 予想仕込みを計算</h2>
       <p>取り込んだ実績×レシピ表をもとに、目標の売上予測または客数を入力するとその比率でST項目ごとの仕込み量を計算します。「同じ曜日の実績を参考表示」を選ぶと、指定した曜日の実績をそのまま(倍率をかけずに)表示します。ここでの結果は表示のみで、各持ち場のチェックリストには反映されません。</p>
       <div class="master-toolbar" id="forecastModeToolbar">
         <label class="tag-toggle"><input type="radio" name="forecastMode" value="sales" checked> 売上予測(万円)から</label>
@@ -1139,6 +1167,7 @@ function masterRowHtml(no, usedNos){
     <td><input type="text" data-field="qty0" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[0]))}"></td>
     <td><input type="text" data-field="qty1" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[1]))}"></td>
     <td><input type="text" data-field="qty2" data-no="${no}" value="${escapeHtml(fmtQty(item.qty[2]))}"></td>
+    <td><input type="text" inputmode="decimal" class="pack-size-input" data-field="packSize" data-no="${no}" placeholder="例:50" value="${escapeHtml(fmtQty(item.packSize))}"></td>
     <td><select data-field="color" data-no="${no}">${colorOptionsHtml(ownColor)}</select></td>
     <td class="limited-cell"><label class="tag-toggle" title="期間限定メニュー"><input type="checkbox" data-field="limitedTime" data-no="${no}"${item.limitedTime ? ' checked' : ''}><span class="tag-badge">${item.limitedTime ? '期間限定' : ''}</span></label></td>
     <td><button class="btn danger" data-kind="delete-item" data-no="${no}">削除</button></td>
@@ -1157,6 +1186,7 @@ function bindMasterEvents(){
       else if(field==='qty0') item.qty[0] = numOrText(e.target.value);
       else if(field==='qty1') item.qty[1] = numOrText(e.target.value);
       else if(field==='qty2') item.qty[2] = numOrText(e.target.value);
+      else if(field==='packSize') item.packSize = numOrText(e.target.value);
       else if(field==='color'){
         item.color = e.target.value;
         const tr = e.target.closest('tr');
@@ -1200,7 +1230,7 @@ document.getElementById('addItemBtn').addEventListener('click', ()=>{
   if(!name) return;
   const maxNo = Math.max(0, ...Object.keys(DATA.master).map(Number));
   const no = maxNo + 1;
-  DATA.master[String(no)] = {no, name, expiry:'', unit:'', qty:[0,0,0], isHeader:false, isNote:false, color:'#ffffff', limitedTime:false};
+  DATA.master[String(no)] = {no, name, expiry:'', unit:'', qty:[0,0,0], packSize:null, isHeader:false, isNote:false, color:'#ffffff', limitedTime:false};
   renderAll();
 });
 
@@ -2171,7 +2201,7 @@ function recipeRowHtml(name, info){
   const chipsHtml = mappings.map((m,i) => {
     const item = DATA.master[String(m.no)];
     const itemName = item ? item.name : '(不明な品番)';
-    return `<span class="recipe-chip">No.${m.no} ${escapeHtml(itemName)} ×${escapeHtml(fmtQty(m.qty))}<button type="button" class="recipe-chip-del" data-kind="recipe-del" data-menu="${escapeHtml(name)}" data-idx="${i}" title="この対応づけを削除">×</button></span>`;
+    return `<span class="recipe-chip">No.${m.no} ${escapeHtml(itemName)} ×<input type="text" inputmode="decimal" class="recipe-chip-qty" data-kind="recipe-edit-qty" data-menu="${escapeHtml(name)}" data-idx="${i}" value="${escapeHtml(fmtQty(m.qty))}"><button type="button" class="recipe-chip-del" data-kind="recipe-del" data-menu="${escapeHtml(name)}" data-idx="${i}" title="この対応づけを削除">×</button></span>`;
   }).join('');
   let suggestHtml = '';
   if(!mappings.length){
@@ -2182,7 +2212,7 @@ function recipeRowHtml(name, info){
       ).join('') + `</div>`;
     }
   }
-  return `<div class="recipe-row">
+  return `<div class="recipe-row" data-menu="${escapeHtml(name)}">
     <div class="recipe-row-head">
       <span class="recipe-name">${escapeHtml(name)}</span>
       <span class="recipe-qty-badge">合計出数 ${fmtQty(info.totalQty)}${info.dept ? ' / ' + escapeHtml(info.dept) : ''}</span>
@@ -2191,13 +2221,124 @@ function recipeRowHtml(name, info){
     ${suggestHtml}
     <div class="recipe-add-row">
       <input type="text" class="recipe-add-no" data-kind="recipe-add-no" data-menu="${escapeHtml(name)}" list="itemOptions" placeholder="No.(ST項目)" autocomplete="off">
-      <input type="text" class="recipe-add-qty" data-kind="recipe-add-qty" data-menu="${escapeHtml(name)}" placeholder="使用量(例:1)" autocomplete="off">
+      <input type="text" inputmode="decimal" class="recipe-add-qty" data-kind="recipe-add-qty" data-menu="${escapeHtml(name)}" placeholder="使用量(例:1)" autocomplete="off">
+      <span class="recipe-qty-presets">${[0.5,1,2,3].map(v => `<button type="button" class="recipe-preset-btn" data-kind="recipe-qty-preset" data-menu="${escapeHtml(name)}" data-val="${v}">${v}</button>`).join('')}</span>
       <button type="button" class="btn" data-kind="recipe-add-btn" data-menu="${escapeHtml(name)}">＋ 追加</button>
+      <button type="button" class="btn" data-kind="recipe-multi-toggle">🧩 複数の食材から選んで追加</button>
+    </div>
+    <div class="recipe-multi-picker" data-kind="recipe-multi-picker" style="display:none;">
+      <div class="recipe-multi-search-row">
+        <input type="text" class="search-box recipe-multi-search" data-kind="recipe-multi-search" placeholder="🔍 品名・Noで検索(複数選択できます)" autocomplete="off">
+        <span class="hint">使用量(共通)<input type="text" inputmode="decimal" class="recipe-multi-qty" data-kind="recipe-multi-qty" value="1"></span>
+        <button type="button" class="btn primary" data-kind="recipe-multi-add">選択した食材をまとめて追加</button>
+        <span class="hint" data-kind="recipe-multi-count">0件選択中</span>
+      </div>
+      <div class="recipe-multi-list" data-kind="recipe-multi-list"></div>
     </div>
   </div>`;
 }
 
+// ---------- 複数の食材をまとめて選んで追加(焼鳥5種盛のような組み合わせ料理向け) ----------
+// 選択中のNo.はメニュー名ごとにここで保持する(DATAには「まとめて追加」ボタン
+// を押した時だけ書き込む)。検索語を変えても選択済みのチェックが消えないよう、
+// 表示中のチェックボックスの状態そのものではなく、この外部Setを正としている。
+const multiPickerSelections = {};
+function getMultiPickerSelection(menu){
+  if(!multiPickerSelections[menu]) multiPickerSelections[menu] = new Set();
+  return multiPickerSelections[menu];
+}
+
+function renderMultiPickerList(row){
+  const menu = row.dataset.menu;
+  const listEl = row.querySelector('[data-kind="recipe-multi-list"]');
+  const searchInput = row.querySelector('.recipe-multi-search');
+  const term = searchInput ? searchInput.value.trim() : '';
+  if(!listEl) return;
+  if(!term){
+    listEl.innerHTML = '<p class="hint">品名またはNo.で検索してください(複数の食材にチェックを付けられます)。</p>';
+    return;
+  }
+  const selection = getMultiPickerSelection(menu);
+  const alreadyMapped = new Set((DATA.recipes[menu]||[]).map(m => m.no));
+  const nos = Object.keys(DATA.master).map(Number).filter(no => {
+    const item = DATA.master[String(no)];
+    if(!item || item.isHeader || item.isNote || !item.name) return false;
+    return String(no).includes(term) || item.name.includes(term);
+  }).sort((a,b) => a-b);
+  if(!nos.length){
+    listEl.innerHTML = '<p class="hint">該当する品目が見つかりません。</p>';
+    return;
+  }
+  const MULTI_PICKER_LIMIT = 40;
+  const shown = nos.slice(0, MULTI_PICKER_LIMIT);
+  listEl.innerHTML = shown.map(no => {
+    const item = DATA.master[String(no)];
+    const checked = selection.has(no);
+    const already = alreadyMapped.has(no);
+    return `<label class="recipe-multi-item${already ? ' already-mapped' : ''}"${already ? ' title="この食材はすでに登録済みです(追加すると新しい行として増えます)"' : ''}><input type="checkbox" data-kind="recipe-multi-chk" data-no="${no}"${checked ? ' checked' : ''}> No.${no} ${escapeHtml(item.name)}</label>`;
+  }).join('') + (nos.length > MULTI_PICKER_LIMIT ? `<p class="hint">他 ${nos.length - MULTI_PICKER_LIMIT} 件あります。検索を絞り込んでください。</p>` : '');
+  row.querySelectorAll('[data-kind="recipe-multi-chk"]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const no = Number(chk.dataset.no);
+      if(chk.checked) selection.add(no); else selection.delete(no);
+      updateMultiPickerCount(row);
+    });
+  });
+  updateMultiPickerCount(row);
+}
+
+function updateMultiPickerCount(row){
+  const menu = row.dataset.menu;
+  const countEl = row.querySelector('[data-kind="recipe-multi-count"]');
+  if(countEl) countEl.textContent = `${getMultiPickerSelection(menu).size}件選択中`;
+}
+
 function bindRecipeEvents(){
+  document.querySelectorAll('[data-kind="recipe-multi-toggle"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const row = el.closest('.recipe-row');
+      const picker = row.querySelector('[data-kind="recipe-multi-picker"]');
+      const willOpen = picker.style.display === 'none' || !picker.style.display;
+      picker.style.display = willOpen ? 'block' : 'none';
+      if(willOpen){
+        renderMultiPickerList(row);
+        const searchInput = row.querySelector('.recipe-multi-search');
+        if(searchInput) searchInput.focus();
+      }
+    });
+  });
+  document.querySelectorAll('.recipe-multi-search').forEach(el => {
+    el.addEventListener('input', () => renderMultiPickerList(el.closest('.recipe-row')));
+  });
+  document.querySelectorAll('[data-kind="recipe-multi-add"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const row = el.closest('.recipe-row');
+      const menu = row.dataset.menu;
+      const selection = getMultiPickerSelection(menu);
+      if(!selection.size){
+        setStatus('食材を1つ以上選択してください。');
+        return;
+      }
+      const qtyInput = row.querySelector('.recipe-multi-qty');
+      const qty = parseFloat((qtyInput.value||'').trim());
+      if(!qty || qty <= 0){
+        setStatus('使用量は0より大きい数値で入力してください。');
+        return;
+      }
+      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
+      const already = new Set(DATA.recipes[menu].map(m => m.no));
+      let added = 0;
+      selection.forEach(no => {
+        if(already.has(no)) return; // 登録済みのNo.は二重登録しない(既存の使用量を変えたい場合はチップ側で編集)
+        DATA.recipes[menu].push({no, qty});
+        added++;
+      });
+      selection.clear();
+      setStatus(added > 0 ? `${added}件のST項目をまとめて追加しました。` : '選択した食材はすでにすべて登録済みでした。');
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
   document.querySelectorAll('[data-kind="recipe-del"]').forEach(el => {
     el.addEventListener('click', () => {
       const menu = el.dataset.menu;
@@ -2208,6 +2349,32 @@ function bindRecipeEvents(){
       }
       renderRecipeList();
       renderForecastResult();
+    });
+  });
+  // 使用量をその場で編集(以前は削除して登録し直す必要があった)。DOM構造は
+  // 変わらないので renderRecipeList() は呼ばず、入力中のフォーカスを保った
+  // まま裏側のデータと計算結果だけを更新する。
+  document.querySelectorAll('[data-kind="recipe-edit-qty"]').forEach(el => {
+    el.addEventListener('change', () => {
+      const menu = el.dataset.menu;
+      const idx = Number(el.dataset.idx);
+      const entry = DATA.recipes[menu] && DATA.recipes[menu][idx];
+      if(!entry) return;
+      const qty = parseFloat(el.value.trim());
+      if(!qty || qty <= 0){
+        setStatus('使用量は0より大きい数値で入力してください。');
+        el.value = fmtQty(entry.qty);
+        return;
+      }
+      entry.qty = qty;
+      renderForecastResult();
+    });
+  });
+  document.querySelectorAll('[data-kind="recipe-qty-preset"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const row = el.closest('.recipe-row');
+      const qtyInput = row.querySelector('[data-kind="recipe-add-qty"]');
+      if(qtyInput) qtyInput.value = el.dataset.val;
     });
   });
   document.querySelectorAll('[data-kind="recipe-suggest-btn"]').forEach(el => {
@@ -2344,7 +2511,12 @@ function computeForecast(){
 
   const resultRows = Object.keys(stTotals).map(no => {
     const item = DATA.master[no];
-    return {no:Number(no), name:item ? item.name : '(不明な品番)', unit:item ? (item.unit||'') : '', qty:stTotals[no]};
+    const qty = stTotals[no];
+    const packSize = item && item.packSize ? Number(item.packSize) : null;
+    // マスタで「1パックの数量」が入力されている品目だけ、必要パック数(切り上げ)
+    // もあわせて計算する — 例: 1パック50本入りで予測120本なら3パック。
+    const packCount = (packSize && packSize > 0) ? Math.ceil(qty / packSize) : null;
+    return {no:Number(no), name:item ? item.name : '(不明な品番)', unit:item ? (item.unit||'') : '', qty, packSize, packCount};
   }).sort((a,b) => a.no - b.no);
 
   return {ok:true, mode, ratio, baselineLabel, resultRows, unmapped: unmapped.slice(0,15), unmappedTotal: unmapped.length};
@@ -2362,8 +2534,8 @@ function renderForecastResult(){
   if(!res.resultRows.length){
     html += '<p class="hint">レシピ表に登録済みのメニューの出数がありません。まず②レシピ表でST項目を対応づけてください。</p>';
   } else {
-    html += `<table class="forecast-table"><thead><tr><th>No.</th><th>品名</th><th>単位</th><th>予想仕込み量</th></tr></thead><tbody>`
-      + res.resultRows.map(r => `<tr><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td></tr>`).join('')
+    html += `<table class="forecast-table"><thead><tr><th>No.</th><th>品名</th><th>単位</th><th>予想仕込み量</th><th>必要パック数</th></tr></thead><tbody>`
+      + res.resultRows.map(r => `<tr><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td><td class="forecast-qty">${r.packCount !== null ? `${r.packCount}パック<span class="hint">(1パック${escapeHtml(fmtQty(r.packSize))})</span>` : '—'}</td></tr>`).join('')
       + `</tbody></table>`;
   }
   if(res.unmapped.length){
@@ -2373,9 +2545,43 @@ function renderForecastResult(){
   out.innerHTML = html;
 }
 
+// ST項目のNo.から、それを使っているメニュー(と使用量)を逆引きする。
+// DATA.recipesはメニュー名→[{no,qty}]という向きなので、単純に全件なめて
+// 一致するNo.を集めるだけ(件数はメニュー数程度で軽い)。
+function renderReverseLookup(){
+  const out = document.getElementById('reverseLookupResult');
+  if(!out) return;
+  const input = document.getElementById('reverseLookupNoInput');
+  const noStr = input ? input.value.trim() : '';
+  if(!noStr){
+    out.innerHTML = '<p class="hint">No.を入力すると、対応するメニューの一覧が表示されます。</p>';
+    return;
+  }
+  const no = Number(noStr);
+  const item = DATA.master[String(no)];
+  if(!no || !item){
+    out.innerHTML = '<p class="hint">そのNo.はマスタに存在しません。</p>';
+    return;
+  }
+  const matches = [];
+  Object.keys(DATA.recipes).forEach(menu => {
+    (DATA.recipes[menu] || []).forEach(m => {
+      if(m.no === no) matches.push({menu, qty:m.qty});
+    });
+  });
+  matches.sort((a,b) => b.qty - a.qty);
+  if(!matches.length){
+    out.innerHTML = `<p class="hint">No.${no} ${escapeHtml(item.name)} を使っているメニューはまだ登録されていません。</p>`;
+    return;
+  }
+  out.innerHTML = `<p class="hint">No.${no} ${escapeHtml(item.name)} を使用しているメニュー(${matches.length}件):</p>`
+    + `<div class="recipe-chips">` + matches.map(m => `<span class="recipe-chip" style="cursor:default;">${escapeHtml(m.menu)} ×${escapeHtml(fmtQty(m.qty))}</span>`).join('') + `</div>`;
+}
+
 function renderForecastTab(){
   renderSalesHistoryList();
   renderRecipeList();
+  renderReverseLookup();
   renderForecastResult();
 }
 
@@ -2503,6 +2709,8 @@ if(recipeBulkMatchBtnEl) recipeBulkMatchBtnEl.addEventListener('click', () => {
   renderRecipeList();
   renderForecastResult();
 });
+const reverseLookupNoInputEl = document.getElementById('reverseLookupNoInput');
+if(reverseLookupNoInputEl) reverseLookupNoInputEl.addEventListener('input', renderReverseLookup);
 
 renderForecastInputArea();
 
