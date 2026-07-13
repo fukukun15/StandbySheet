@@ -595,7 +595,15 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
       <div class="master-toolbar">
         <button type="button" class="btn primary" id="importCsvBtn">📥 このCSVを取り込む</button>
         <label class="btn" for="salesCsvFile">📂 CSVファイルを選択
-          <input type="file" id="salesCsvFile" accept=".csv,text/csv" style="display:none;">
+          <!-- No accept= filter: some OS file dialogs grey out (make
+               unselectable) files whose extension/MIME the browser doesn't
+               recognize as an exact match for ".csv"/"text/csv" — Japanese
+               POS exports have shown up as things like "CSV" (uppercase),
+               ".txt", or an Excel-flavored MIME type. Leaving accept unset
+               means every file is always selectable; a wrong pick just
+               fails to parse (and shows the usual error message) rather
+               than silently blocking selection. -->
+          <input type="file" id="salesCsvFile" style="display:none;">
         </label>
         <span class="hint" id="csvImportStatus"></span>
       </div>
