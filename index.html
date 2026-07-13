@@ -625,6 +625,12 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
       <h2>② レシピ表(メニュー ⇔ ST項目の対応)</h2>
       <p>1つの料理が複数のST項目からできている場合は、必要なST項目を複数行、使用量とあわせて登録してください(例: 焼鳥5種盛 → 対応する各串を1本ずつ)。ST項目は「マスタ編集」タブで登録したNo.で指定します。まだ対応づけていないメニューは出数の多い順に並びます。品名がマスタの品名と似ている場合は「候補」として自動で表示されるので、ワンクリックで採用できます。</p>
       <div class="master-toolbar">
+        <button type="button" class="btn primary" id="saveMasterRecipeBtn">💾 マスタ・レシピ表を保存</button>
+        <button type="button" class="btn" id="loadMasterRecipeBtn">📂 マスタ・レシピ表を読み込む</button>
+        <input type="file" id="loadMasterRecipeFile" accept="application/json" style="display:none;">
+        <span class="hint" id="masterRecipeIoStatus">品目マスタ・レシピ表・取り込み済みの売上実績をまとめて1つのファイルに保存します(日々のチェックリストの記入内容は含みません)。「マスタ編集」タブの内容も一緒に保存されます。</span>
+      </div>
+      <div class="master-toolbar">
         <input type="text" id="recipeSearchInput" class="search-box" placeholder="🔍 メニュー名で検索" autocomplete="off">
         <button type="button" class="btn" id="recipeBulkMatchBtn">⚡ 完全一致の候補を一括採用</button>
         <label class="tag-toggle" style="margin-left:auto;"><input type="checkbox" id="recipeUnmappedOnlyChk"> 未設定のみ表示</label>
@@ -2372,6 +2378,79 @@ function renderForecastTab(){
   renderRecipeList();
   renderForecastResult();
 }
+
+// ---------- マスタ・レシピ表の保存/読み込み(日々の記録とは別の独立したファイル) ----------
+// DATA自体(品目マスタ＋各持ち場のNo.並び＋レシピ表＋取り込み済み売上実績)を
+// そのまま書き出す — 「記録・保存」タブの保存ファイルの中の masterData と
+// 全く同じ形。日々のチェックリスト記入内容(date/staff/forecast/items)は
+// 含まないので、苦労して登録したレシピ表だけを軽量にバックアップ・共有・
+// 別端末へ移せる。読み込み側はapplyLoadedRecord()をそのまま再利用する
+// (d.masterData が無く d.master/d.stations がある「マスタのみ」形式として
+// 正しく解釈される、既存の読み込みロジックそのもの)。
+// あえて saveWithPicker()/openWithPicker() は使わず処理を分けている —
+// あちらは「記録・保存」タブの currentFileHandle(上書き保存の対象ファイル)
+// を書き換えてしまうため、共用すると、後で日々の記録を「上書き保存」した
+// 際にこのマスタ専用ファイルが記録ファイルの形式で上書きされてしまう事故
+// につながる。
+async function saveMasterRecipeFile(){
+  const filename = `マスタ・レシピ表_${state.date || todayStr()}.json`;
+  const text = JSON.stringify(DATA, null, 1);
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{description:'JSONファイル', accept:{'application/json':['.json']}}]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      document.getElementById('masterRecipeIoStatus').textContent = '保存しました: ' + filename;
+      return;
+    }catch(err){
+      if(err && err.name === 'AbortError') return; // person cancelled
+    }
+  }
+  downloadFallback(filename, DATA);
+  document.getElementById('masterRecipeIoStatus').textContent = '保存しました: ' + filename;
+}
+
+async function openMasterRecipeFile(){
+  if(window.showOpenFilePicker){
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types: [{description:'JSONファイル', accept:{'application/json':['.json']}}]
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      const d = JSON.parse(text);
+      applyLoadedRecord(d);
+      document.getElementById('masterRecipeIoStatus').textContent = '読み込みました: ' + file.name;
+      return;
+    }catch(err){
+      if(err && err.name === 'AbortError') return; // person cancelled
+    }
+  }
+  document.getElementById('loadMasterRecipeFile').click();
+}
+
+document.getElementById('saveMasterRecipeBtn').addEventListener('click', saveMasterRecipeFile);
+document.getElementById('loadMasterRecipeBtn').addEventListener('click', openMasterRecipeFile);
+document.getElementById('loadMasterRecipeFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const d = JSON.parse(reader.result);
+      applyLoadedRecord(d);
+      document.getElementById('masterRecipeIoStatus').textContent = '読み込みました: ' + file.name;
+    }catch(err){
+      document.getElementById('masterRecipeIoStatus').textContent = '読み込みに失敗しました: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
 
 document.getElementById('importCsvBtn').addEventListener('click', () => {
   const text = document.getElementById('salesCsvPaste').value;
