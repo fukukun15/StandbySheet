@@ -294,6 +294,37 @@ table.master-table select[data-field="color"]{
   background:#fff;padding:8px 0;
 }
 .hint{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+/* ---------- 予想仕込み (demand forecast) tab ---------- */
+.csv-paste-area{
+  width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:12px;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;
+}
+.recipe-row{border-bottom:1px solid var(--line);padding:10px 2px;}
+.recipe-row:last-child{border-bottom:none;}
+.recipe-row-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+.recipe-name{font-weight:700;}
+.recipe-qty-badge{font-size:12px;color:var(--ink-soft);}
+.recipe-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;}
+.recipe-chip{
+  display:inline-flex;align-items:center;gap:5px;background:#f4efe6;border:1px solid var(--line);
+  border-radius:999px;padding:3px 10px;font-size:12.5px;
+}
+.recipe-chip-del{
+  border:none;background:none;cursor:pointer;color:#a5271b;font-weight:700;font-size:13px;
+  line-height:1;padding:0 0 0 2px;
+}
+.recipe-add-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.recipe-add-row .recipe-add-no{width:110px;}
+.recipe-add-row .recipe-add-qty{width:110px;}
+.recipe-add-row input{
+  font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+}
+table.forecast-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+table.forecast-table th, table.forecast-table td{
+  border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;
+}
+table.forecast-table th{background:#fff;font-size:12px;color:var(--ink-soft);}
+table.forecast-table td.forecast-qty{font-weight:700;text-align:right;}
 .history-row{
   display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);
   flex-wrap:wrap;
@@ -311,6 +342,17 @@ footer.print-only{display:none;}
    AND under @media print (fallback for prints triggered without our JS, e.g. Ctrl+P). */
 @media print{
   @page{ size:A4 portrait; margin:6mm; }
+  /* Without this, Chrome/Edge/Safari default to stripping background colors
+     when printing UNLESS the person happens to have manually checked
+     "背景のグラフィック"(Background graphics) in the print dialog's advanced
+     options — off by default in most browsers. That silently turned every
+     row color (custom master colors, category headers, the yellow 本日ST
+     column) into plain white/black on the actual printout, even though the
+     on-screen 🔍 印刷プレビュー looked correct (it's plain DOM/CSS, not
+     routed through the browser's print pipeline, so it was never affected).
+     This property tells the browser to print backgrounds exactly as shown
+     regardless of that checkbox, so colors show up correctly by default. */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact;}
   .app-header, .tabs, .toolbar, .no-print, .sheet-toolbar{display:none !important;}
   /* previewExitBar deliberately does NOT carry .no-print (it needs to stay
      visible ON SCREEN while print-preview-mode is active, which is the
@@ -545,6 +587,49 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
     </div>
   </section>
 
+  <section class="panel" id="panel-forecast">
+    <div class="card no-print">
+      <h2>① 出数CSVの取り込み</h2>
+      <p>POSレジから出力した「出数」CSVの中身をそのまま貼り付けてください(1行目が項目名の行のままでOKです)。同じ営業日が含まれるCSVを貼り直すと、その日のデータだけ新しい内容で上書きされます。何回かに分けて貼り付けていくことで、日々の実績を積み上げられます。</p>
+      <textarea id="salesCsvPaste" class="csv-paste-area" rows="6" placeholder="ここにCSVの内容を貼り付けてください"></textarea>
+      <div class="master-toolbar">
+        <button type="button" class="btn primary" id="importCsvBtn">📥 このCSVを取り込む</button>
+        <label class="btn" for="salesCsvFile">📂 CSVファイルを選択
+          <input type="file" id="salesCsvFile" accept=".csv,text/csv" style="display:none;">
+        </label>
+        <span class="hint" id="csvImportStatus"></span>
+      </div>
+    </div>
+
+    <div class="card no-print">
+      <h2>取り込み済みの実績</h2>
+      <p>営業日ごとの実績です。客数は「お通し」＋「お子様飲放」の出数の合計、売上はその日に取り込んだ全メニューの売上金額の合計です。</p>
+      <div id="salesHistoryList"></div>
+    </div>
+
+    <div class="card no-print">
+      <h2>② レシピ表(メニュー ⇔ ST項目の対応)</h2>
+      <p>1つの料理が複数のST項目からできている場合は、必要なST項目を複数行、使用量とあわせて登録してください(例: 焼鳥5種盛 → 対応する各串を1本ずつ)。ST項目は「マスタ編集」タブで登録したNo.で指定します。まだ対応づけていないメニューは出数の多い順に並びます。</p>
+      <div class="master-toolbar">
+        <input type="text" id="recipeSearchInput" class="search-box" placeholder="🔍 メニュー名で検索" autocomplete="off">
+        <label class="tag-toggle" style="margin-left:auto;"><input type="checkbox" id="recipeUnmappedOnlyChk"> 未設定のみ表示</label>
+      </div>
+      <div id="recipeList"></div>
+    </div>
+
+    <div class="card no-print">
+      <h2>③ 予想仕込みを計算</h2>
+      <p>取り込んだ実績×レシピ表をもとに、目標の売上予測または客数を入力するとその比率でST項目ごとの仕込み量を計算します。「同じ曜日の実績を参考表示」を選ぶと、指定した曜日の実績をそのまま(倍率をかけずに)表示します。ここでの結果は表示のみで、各持ち場のチェックリストには反映されません。</p>
+      <div class="master-toolbar" id="forecastModeToolbar">
+        <label class="tag-toggle"><input type="radio" name="forecastMode" value="sales" checked> 売上予測(万円)から</label>
+        <label class="tag-toggle"><input type="radio" name="forecastMode" value="customers"> 客数から</label>
+        <label class="tag-toggle"><input type="radio" name="forecastMode" value="weekday"> 同じ曜日の実績を参考表示</label>
+      </div>
+      <div class="master-toolbar" id="forecastInputToolbar"></div>
+      <div id="forecastResult"></div>
+    </div>
+  </section>
+
   <section class="panel" id="panel-records">
     <div class="card no-print">
       <h2>記録の保存 / 読み込み</h2>
@@ -579,6 +664,17 @@ const DEFAULT_DATA = {"master":{"1":{"no":1,"name":"刺場","expiry":null,"unit"
 
 let DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
 if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
+// 予想仕込み (demand-forecast) feature data — kept on DATA itself (alongside
+// master/stations) so it rides along for free with every existing save/load/
+// draft-autosave/reset path, rather than needing its own separate storage
+// and merge logic. Old save files (and the bare DEFAULT_DATA above) simply
+// don't have these keys yet, so every entry point that can (re)assign DATA
+// wholesale calls this afterward to backfill empty containers.
+function ensureDataDefaults(){
+  if(!DATA.salesHistory || typeof DATA.salesHistory !== 'object') DATA.salesHistory = {};
+  if(!DATA.recipes || typeof DATA.recipes !== 'object') DATA.recipes = {};
+}
+ensureDataDefaults();
 let state = null;
 
 // The 品目マスタ (DATA.master — item names/quantities/expiry/color) always
@@ -641,6 +737,7 @@ function buildTabs(){
   wrap.innerHTML = '';
   const defs = [...DATA.stations.map(s=>({id:s.id,name:s.name,kind:'station'})),
                 {id:'master', name:'マスタ編集', kind:'meta'},
+                {id:'forecast', name:'予想仕込み', kind:'meta'},
                 {id:'records', name:'記録・保存', kind:'meta'}];
   defs.forEach(d => {
     const b = document.createElement('button');
@@ -934,7 +1031,7 @@ function renderTabsOnly(){
 }
 
 function showActivePanel(){
-  document.querySelectorAll('#stationPanels .panel, #panel-master, #panel-records').forEach(p=>{
+  document.querySelectorAll('#stationPanels .panel, #panel-master, #panel-forecast, #panel-records').forEach(p=>{
     const id = p.id.replace('panel-','');
     p.classList.toggle('active', id===state.activeTab);
   });
@@ -1233,6 +1330,7 @@ function applyLoadedRecord(d){
     if(typeof DATA.nextRowId !== 'number') DATA.nextRowId = -1;
     initItemStates();
   }
+  ensureDataDefaults();
   if(d.date !== undefined) state.date = d.date;
   if(d.dayOfWeek !== undefined) state.dayOfWeek = d.dayOfWeek;
   if(d.staff !== undefined) state.staff = d.staff;
@@ -1357,6 +1455,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('編集内容を破棄して初期データに戻しますか？')) return;
   DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
   DATA.nextRowId = -1;
+  ensureDataDefaults();
   clearStationOrders();
   state = freshState();
   initItemStates();
@@ -1757,10 +1856,430 @@ function renderAll(){
   buildTabs();
   renderStationPanels();
   renderMasterTable();
+  renderForecastTab();
   showActivePanel();
   buildItemDatalist();
   updateStickyOffsets();
 }
+
+// ---------- 予想仕込み (demand forecast) ----------
+// Pipeline: paste/upload a POS 出数 CSV export -> parse & aggregate into
+// DATA.salesHistory (per business day: customer count, total sales, per-menu
+// qty) -> the person maps each menu name to one or more ST items (master
+// Nos) with a per-order usage quantity in DATA.recipes -> the 予想仕込み
+// calculator multiplies historical per-menu averages by recipe quantities,
+// scaled by a target 売上予測/客数 ratio (or shown as-is for a matching
+// weekday), to estimate ST-item prep quantities. Results are DISPLAY ONLY —
+// nothing here writes into the station checklists themselves.
+
+function parseCSVText(text){
+  // Minimal RFC4180-ish CSV parser: handles quoted fields (with embedded
+  // commas/newlines/escaped "" quotes) as well as plain unquoted fields.
+  // POS exports of this kind haven't needed quoting in practice, but this
+  // is cheap insurance against a stray comma inside a menu name.
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if(c === '\r'){ /* skip — \r\n line endings handled via the \n branch */ }
+      else field += c;
+    }
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function normalizeSalesDate(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  let m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  return null;
+}
+
+function parseSalesNum(s){
+  if(s === undefined || s === null) return 0;
+  const n = parseFloat(String(s).replace(/,/g,'').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+const WEEKDAY_LABELS = ['日','月','火','水','木','金','土'];
+function dowLabel(dow){ return WEEKDAY_LABELS[dow] || ''; }
+
+// Parses the pasted/uploaded CSV text and merges it into DATA.salesHistory,
+// keyed by normalized business date ("2026-07-08"). Re-importing a CSV that
+// contains a date already present replaces just that date's data (so the
+// person can paste corrected/updated exports without duplicating totals),
+// while other already-imported dates are left untouched.
+function importSalesCsv(text){
+  const rows = parseCSVText(text).filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
+  if(rows.length < 2){
+    return {ok:false, message:'CSVの内容が読み取れませんでした。1行目が項目名、2行目以降がデータの形式で貼り付けてください。'};
+  }
+  const header = rows[0].map(h => h.trim());
+  const REQUIRED = ['営業日','部門名','メニュー名称','単価','売上金額','売上数量'];
+  const idx = {};
+  REQUIRED.forEach(name => { idx[name] = header.indexOf(name); });
+  const missing = REQUIRED.filter(name => idx[name] === -1);
+  if(missing.length){
+    return {ok:false, message:'必要な列が見つかりません(' + missing.join('、') + ')。POSの「出数」CSVをそのまま貼り付けてください。'};
+  }
+  const delFlagIdx = header.indexOf('削除フラグ');
+  const byDate = {};
+  let rowCount = 0;
+  for(let r=1;r<rows.length;r++){
+    const cols = rows[r];
+    if(cols.length < 2) continue;
+    if(delFlagIdx !== -1 && String(cols[delFlagIdx]||'').trim() === '1') continue;
+    const dateKey = normalizeSalesDate(cols[idx['営業日']]);
+    if(!dateKey) continue;
+    const name = String(cols[idx['メニュー名称']] || '').trim();
+    if(!name) continue;
+    const dept = String(cols[idx['部門名']] || '').trim();
+    const unitPrice = parseSalesNum(cols[idx['単価']]);
+    const amount = parseSalesNum(cols[idx['売上金額']]);
+    const qty = parseSalesNum(cols[idx['売上数量']]);
+    if(!byDate[dateKey]) byDate[dateKey] = {items:{}, totalSales:0, otoshi:0, kids:0};
+    const day = byDate[dateKey];
+    day.totalSales += amount;
+    if(!day.items[name]) day.items[name] = {qty:0, unitPrice:unitPrice, dept:dept};
+    day.items[name].qty += qty;
+    if(unitPrice) day.items[name].unitPrice = unitPrice;
+    if(dept) day.items[name].dept = dept;
+    if(name === 'お通し') day.otoshi += qty;
+    if(name === 'お子様飲放') day.kids += qty;
+    rowCount++;
+  }
+  const dateKeys = Object.keys(byDate);
+  if(!dateKeys.length){
+    return {ok:false, message:'有効な営業日のデータが見つかりませんでした。'};
+  }
+  dateKeys.forEach(dateKey => {
+    const day = byDate[dateKey];
+    const [y,m,d] = dateKey.split('-').map(Number);
+    DATA.salesHistory[dateKey] = {
+      date: dateKey,
+      dow: new Date(y, m-1, d).getDay(),
+      customerCount: day.otoshi + day.kids,
+      totalSales: day.totalSales,
+      items: day.items
+    };
+  });
+  dateKeys.sort();
+  return {ok:true, message:`取り込みました: ${dateKeys.join('、')}(${rowCount}行)`, dates: dateKeys};
+}
+
+function renderSalesHistoryList(){
+  const container = document.getElementById('salesHistoryList');
+  if(!container) return;
+  const dateKeys = Object.keys(DATA.salesHistory).sort();
+  if(!dateKeys.length){
+    container.innerHTML = '<p class="hint">まだ取り込まれていません。上のCSV貼り付け欄からデータを取り込んでください。</p>';
+    return;
+  }
+  container.innerHTML = dateKeys.map(dk => {
+    const day = DATA.salesHistory[dk];
+    return `<div class="history-row">
+      <span class="history-name">${escapeHtml(dk)}(${dowLabel(day.dow)}) — 客数 ${fmtQty(day.customerCount)}人 / 売上 ${(day.totalSales/10000).toFixed(1)}万円</span>
+      <button type="button" class="btn danger" data-kind="delete-sales-day" data-date="${escapeHtml(dk)}">削除</button>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('[data-kind="delete-sales-day"]').forEach(el => {
+    el.addEventListener('click', () => {
+      delete DATA.salesHistory[el.dataset.date];
+      renderSalesHistoryList();
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
+}
+
+// Union of every menu name seen across all imported business days, with
+// aggregated total qty (for sorting by popularity) and the most recently
+// seen department (for context only).
+function allSalesMenuNames(){
+  const map = {};
+  Object.values(DATA.salesHistory).forEach(day => {
+    Object.keys(day.items).forEach(name => {
+      if(!map[name]) map[name] = {totalQty:0, dept:day.items[name].dept};
+      map[name].totalQty += day.items[name].qty;
+      if(day.items[name].dept) map[name].dept = day.items[name].dept;
+    });
+  });
+  return map;
+}
+
+const RECIPE_LIST_LIMIT = 80;
+
+function renderRecipeList(){
+  const container = document.getElementById('recipeList');
+  if(!container) return;
+  const searchInput = document.getElementById('recipeSearchInput');
+  const unmappedChk = document.getElementById('recipeUnmappedOnlyChk');
+  const searchTerm = searchInput ? searchInput.value.trim() : '';
+  const unmappedOnly = unmappedChk ? unmappedChk.checked : false;
+  const menuMap = allSalesMenuNames();
+  let names = Object.keys(menuMap);
+  if(searchTerm) names = names.filter(n => n.includes(searchTerm));
+  if(unmappedOnly) names = names.filter(n => !DATA.recipes[n] || DATA.recipes[n].length === 0);
+  names.sort((a,b) => menuMap[b].totalQty - menuMap[a].totalQty);
+  if(!names.length){
+    container.innerHTML = '<p class="hint">該当するメニューがありません。まずCSVを取り込んでください。</p>';
+    return;
+  }
+  const shown = names.slice(0, RECIPE_LIST_LIMIT);
+  container.innerHTML = shown.map(name => recipeRowHtml(name, menuMap[name])).join('')
+    + (names.length > RECIPE_LIST_LIMIT ? `<p class="hint">他 ${names.length - RECIPE_LIST_LIMIT} 件あります。検索で絞り込んでください。</p>` : '');
+  bindRecipeEvents();
+}
+
+function recipeRowHtml(name, info){
+  const mappings = DATA.recipes[name] || [];
+  const chipsHtml = mappings.map((m,i) => {
+    const item = DATA.master[String(m.no)];
+    const itemName = item ? item.name : '(不明な品番)';
+    return `<span class="recipe-chip">No.${m.no} ${escapeHtml(itemName)} ×${escapeHtml(fmtQty(m.qty))}<button type="button" class="recipe-chip-del" data-kind="recipe-del" data-menu="${escapeHtml(name)}" data-idx="${i}" title="この対応づけを削除">×</button></span>`;
+  }).join('');
+  return `<div class="recipe-row">
+    <div class="recipe-row-head">
+      <span class="recipe-name">${escapeHtml(name)}</span>
+      <span class="recipe-qty-badge">合計出数 ${fmtQty(info.totalQty)}${info.dept ? ' / ' + escapeHtml(info.dept) : ''}</span>
+    </div>
+    <div class="recipe-chips">${chipsHtml || '<span class="hint">未設定</span>'}</div>
+    <div class="recipe-add-row">
+      <input type="text" class="recipe-add-no" data-kind="recipe-add-no" data-menu="${escapeHtml(name)}" list="itemOptions" placeholder="No.(ST項目)" autocomplete="off">
+      <input type="text" class="recipe-add-qty" data-kind="recipe-add-qty" data-menu="${escapeHtml(name)}" placeholder="使用量(例:1)" autocomplete="off">
+      <button type="button" class="btn" data-kind="recipe-add-btn" data-menu="${escapeHtml(name)}">＋ 追加</button>
+    </div>
+  </div>`;
+}
+
+function bindRecipeEvents(){
+  document.querySelectorAll('[data-kind="recipe-del"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const menu = el.dataset.menu;
+      const idx = Number(el.dataset.idx);
+      if(DATA.recipes[menu]){
+        DATA.recipes[menu].splice(idx,1);
+        if(!DATA.recipes[menu].length) delete DATA.recipes[menu];
+      }
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
+  document.querySelectorAll('[data-kind="recipe-add-btn"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const menu = el.dataset.menu;
+      const row = el.closest('.recipe-row');
+      const noInput = row.querySelector('[data-kind="recipe-add-no"]');
+      const qtyInput = row.querySelector('[data-kind="recipe-add-qty"]');
+      const no = Number(noInput.value.trim());
+      const qty = parseFloat(qtyInput.value.trim());
+      if(!no || !DATA.master[String(no)]){
+        setStatus('存在するNo.を入力してください。');
+        return;
+      }
+      if(!qty || qty <= 0){
+        setStatus('使用量は0より大きい数値で入力してください。');
+        return;
+      }
+      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
+      DATA.recipes[menu].push({no, qty});
+      renderRecipeList();
+      renderForecastResult();
+    });
+  });
+}
+
+function forecastMode(){
+  const el = document.querySelector('input[name="forecastMode"]:checked');
+  return el ? el.value : 'sales';
+}
+
+// Rebuilds just the target-input area for whichever mode is selected. Called
+// once at page load, and again whenever the mode radio changes — deliberately
+// NOT called from renderForecastTab()/renderAll(), since that runs on every
+// tab switch and would otherwise wipe out whatever the person is mid-typing
+// into the target field.
+function renderForecastInputArea(){
+  const wrap = document.getElementById('forecastInputToolbar');
+  if(!wrap) return;
+  const mode = forecastMode();
+  if(mode === 'sales'){
+    wrap.innerHTML = `<span class="banner-text">目標売上予測<input type="text" id="forecastTargetInput" class="underline-input forecast-underline" placeholder="例: 30" value="${escapeHtml((state && state.forecast) || '')}">万円</span>`;
+  } else if(mode === 'customers'){
+    wrap.innerHTML = `<span class="banner-text">目標客数<input type="text" id="forecastTargetInput" class="underline-input forecast-underline" placeholder="例: 80">人</span>`;
+  } else {
+    wrap.innerHTML = `<span class="banner-text">曜日<select id="forecastWeekdaySelect">${WEEKDAY_LABELS.map((d,i)=>`<option value="${i}">${d}曜日</option>`).join('')}</select></span>`;
+  }
+  const liveInput = document.getElementById('forecastTargetInput') || document.getElementById('forecastWeekdaySelect');
+  if(liveInput){
+    liveInput.addEventListener('change', renderForecastResult);
+    liveInput.addEventListener('keydown', e => { if(e.key === 'Enter') renderForecastResult(); });
+  }
+}
+
+function fmtForecastQty(n){
+  if(!Number.isFinite(n)) return '0';
+  const rounded = Math.round(n * 10) / 10;
+  return (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(1);
+}
+
+function computeForecast(){
+  const mode = forecastMode();
+  const dateKeys = Object.keys(DATA.salesHistory).sort();
+  if(!dateKeys.length){
+    return {ok:false, message:'まだCSVが取り込まれていません。①でデータを取り込んでください。'};
+  }
+  let refDateKeys = dateKeys;
+  let ratio = 1;
+  let baselineLabel = '';
+  if(mode === 'weekday'){
+    const sel = document.getElementById('forecastWeekdaySelect');
+    const dow = sel ? Number(sel.value) : 0;
+    refDateKeys = dateKeys.filter(dk => DATA.salesHistory[dk].dow === dow);
+    if(!refDateKeys.length){
+      return {ok:false, message: `${dowLabel(dow)}曜日の取り込み済みデータがありません。`};
+    }
+    baselineLabel = `${dowLabel(dow)}曜日の実績(${refDateKeys.length}日分の平均、倍率なしでそのまま表示)`;
+  } else {
+    const targetInput = document.getElementById('forecastTargetInput');
+    const target = targetInput ? parseFloat(targetInput.value.trim()) : NaN;
+    if(!target || target <= 0){
+      return {ok:false, message: mode==='sales' ? '目標売上予測(万円)を入力してください。' : '目標客数(人)を入力してください。'};
+    }
+    if(mode === 'sales'){
+      const avgManYen = dateKeys.reduce((s,dk)=>s+DATA.salesHistory[dk].totalSales,0) / dateKeys.length / 10000;
+      if(avgManYen <= 0) return {ok:false, message:'実績データの売上が0のため計算できません。'};
+      ratio = target / avgManYen;
+      baselineLabel = `実績平均売上 ${avgManYen.toFixed(1)}万円(${dateKeys.length}日分) → 目標 ${target}万円 (倍率 ×${ratio.toFixed(2)})`;
+    } else {
+      const avgCustomers = dateKeys.reduce((s,dk)=>s+DATA.salesHistory[dk].customerCount,0) / dateKeys.length;
+      if(avgCustomers <= 0) return {ok:false, message:'実績データの客数が0のため計算できません。'};
+      ratio = target / avgCustomers;
+      baselineLabel = `実績平均客数 ${avgCustomers.toFixed(1)}人(${dateKeys.length}日分) → 目標 ${target}人 (倍率 ×${ratio.toFixed(2)})`;
+    }
+  }
+
+  const menuAvg = {};
+  refDateKeys.forEach(dk => {
+    const day = DATA.salesHistory[dk];
+    Object.keys(day.items).forEach(name => {
+      menuAvg[name] = (menuAvg[name]||0) + day.items[name].qty;
+    });
+  });
+  Object.keys(menuAvg).forEach(name => { menuAvg[name] = menuAvg[name] / refDateKeys.length; });
+
+  const stTotals = {};
+  const unmapped = [];
+  Object.keys(menuAvg).forEach(name => {
+    const predictedQty = menuAvg[name] * ratio;
+    const recipe = DATA.recipes[name];
+    if(recipe && recipe.length){
+      recipe.forEach(m => { stTotals[m.no] = (stTotals[m.no]||0) + predictedQty * m.qty; });
+    } else if(predictedQty > 0){
+      unmapped.push({name, qty:predictedQty});
+    }
+  });
+  unmapped.sort((a,b) => b.qty - a.qty);
+
+  const resultRows = Object.keys(stTotals).map(no => {
+    const item = DATA.master[no];
+    return {no:Number(no), name:item ? item.name : '(不明な品番)', unit:item ? (item.unit||'') : '', qty:stTotals[no]};
+  }).sort((a,b) => a.no - b.no);
+
+  return {ok:true, mode, ratio, baselineLabel, resultRows, unmapped: unmapped.slice(0,15), unmappedTotal: unmapped.length};
+}
+
+function renderForecastResult(){
+  const out = document.getElementById('forecastResult');
+  if(!out) return;
+  const res = computeForecast();
+  if(!res.ok){
+    out.innerHTML = `<p class="hint">${escapeHtml(res.message)}</p>`;
+    return;
+  }
+  let html = `<p class="hint">${escapeHtml(res.baselineLabel)}</p>`;
+  if(!res.resultRows.length){
+    html += '<p class="hint">レシピ表に登録済みのメニューの出数がありません。まず②レシピ表でST項目を対応づけてください。</p>';
+  } else {
+    html += `<table class="forecast-table"><thead><tr><th>No.</th><th>品名</th><th>単位</th><th>予想仕込み量</th></tr></thead><tbody>`
+      + res.resultRows.map(r => `<tr><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td></tr>`).join('')
+      + `</tbody></table>`;
+  }
+  if(res.unmapped.length){
+    html += `<p class="hint" style="margin-top:12px;">⚠ レシピ未設定のメニュー(出数の多い順、上位${res.unmapped.length}件${res.unmappedTotal > res.unmapped.length ? ' / 全'+res.unmappedTotal+'件' : ''}) — ②レシピ表でST項目を対応づけると、この計算結果に反映されます。</p>`
+      + `<div class="recipe-chips">` + res.unmapped.map(u => `<span class="recipe-chip" style="cursor:default;">${escapeHtml(u.name)}(平均${fmtForecastQty(u.qty)}/日)</span>`).join('') + `</div>`;
+  }
+  out.innerHTML = html;
+}
+
+function renderForecastTab(){
+  renderSalesHistoryList();
+  renderRecipeList();
+  renderForecastResult();
+}
+
+document.getElementById('importCsvBtn').addEventListener('click', () => {
+  const text = document.getElementById('salesCsvPaste').value;
+  const statusEl = document.getElementById('csvImportStatus');
+  if(!text || !text.trim()){
+    statusEl.textContent = '貼り付け欄が空です。';
+    return;
+  }
+  const res = importSalesCsv(text);
+  statusEl.textContent = res.message;
+  if(res.ok){
+    document.getElementById('salesCsvPaste').value = '';
+    renderForecastTab();
+  }
+});
+
+document.getElementById('salesCsvFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('csvImportStatus');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const res = importSalesCsv(reader.result);
+    statusEl.textContent = res.message;
+    if(res.ok) renderForecastTab();
+  };
+  reader.onerror = () => { statusEl.textContent = 'ファイルの読み込みに失敗しました。貼り付け欄への直接貼り付けをお試しください。'; };
+  // Japanese POS exports are typically Shift_JIS-encoded; browsers decode
+  // this natively per the WHATWG Encoding Standard. The paste box above is
+  // the primary, most reliable path (clipboard text is already decoded by
+  // the OS) — this file picker is just a convenience alternative.
+  reader.readAsText(file, 'shift_jis');
+  e.target.value = '';
+});
+
+document.querySelectorAll('input[name="forecastMode"]').forEach(el => {
+  el.addEventListener('change', () => {
+    renderForecastInputArea();
+    renderForecastResult();
+  });
+});
+const recipeSearchInputEl = document.getElementById('recipeSearchInput');
+if(recipeSearchInputEl) recipeSearchInputEl.addEventListener('input', renderRecipeList);
+const recipeUnmappedOnlyChkEl = document.getElementById('recipeUnmappedOnlyChk');
+if(recipeUnmappedOnlyChkEl) recipeUnmappedOnlyChkEl.addEventListener('change', renderRecipeList);
+
+renderForecastInputArea();
 
 // init
 state = freshState();
