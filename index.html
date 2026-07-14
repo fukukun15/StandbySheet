@@ -725,6 +725,9 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         <span id="cloudSyncStatusInline" class="hint">状態は画面上部に表示されます。</span>
         <button type="button" class="btn" id="cloudSyncNowBtn">🔄 今すぐ同期</button>
       </div>
+      <h3 class="cloud-subheading">📜 編集履歴(直近)</h3>
+      <p class="hint">このクラウド同期(常に最新状態を共有する方)に、いつ・どの担当者名で保存されたかの簡単な記録を残します(名前を付けて保存したクラウド記録とは別です)。</p>
+      <div id="cloudEditHistoryList"></div>
       <h3 class="cloud-subheading">クラウドに名前を付けて保存</h3>
       <p>今の内容(日付・担当者・記入内容・マスタ・レシピ表など)に名前を付けてクラウドに保存しておくと、どの端末からでも一覧から選んで開き直せます(過去の記録の参照・復元用。上のクラウド同期そのものとは別に、任意のタイミングで残すスナップショットです)。</p>
       <div class="master-toolbar">
@@ -1245,9 +1248,21 @@ function colorOptionsHtml(selected){
   return opts;
 }
 
+// 「マスタで未使用(薄く表示)」の判定は、各持ち場の行に実際に入力されている
+// No.(state.items[station][row].enteredNo)を見る必要がある — station.order
+// は行の「位置ID」であって、そこに今何のNo.が入力されているかとは別物。
+// (以前はorderの値をそのままNo.として扱っていたため、行のNo.欄を後から
+// 別の番号に書き換えると、実際に使われているのに「未使用」扱いのまま薄く
+// 表示され続けるバグがあった。)
 function usedMasterNos(){
   const used = new Set();
-  DATA.stations.forEach(s => s.order.forEach(no => used.add(String(no))));
+  DATA.stations.forEach(station => {
+    const items = state.items[station.id] || {};
+    Object.keys(items).forEach(rowId => {
+      const entered = items[rowId] && items[rowId].enteredNo;
+      if(entered) used.add(String(entered));
+    });
+  });
   return used;
 }
 
@@ -2961,6 +2976,49 @@ let cloudInitialSnapshotReceived = false;
 // 「リアルタイム共有データ」に勝手に戻さないようにするためのフラグ。
 let currentDataSourceIsExplicit = false;
 
+// ---------- クラウド同期(stores/main)の簡易な編集履歴 ----------
+// 「名前を付けて保存」した記録とは別に、常に最新状態を共有している
+// stores/main ドキュメント自体に「いつ・どの担当者名で」更新されたかの
+// 簡単な履歴を残す。数秒おきの自動同期のたびに書き足すと膨大になるため、
+// 担当者名か日付が変わった時、または前回の記録から一定時間経った時だけ
+// 新しいエントリを追加する(単なる自動再送信では増やさない)。
+let cloudEditHistory = [];
+const CLOUD_EDIT_HISTORY_LIMIT = 20;
+const CLOUD_EDIT_HISTORY_MIN_INTERVAL_MS = 5 * 60 * 1000;
+
+function computeHistoryForPush(){
+  const last = cloudEditHistory[cloudEditHistory.length - 1];
+  const staff = (state.staff || '').trim() || '(未入力)';
+  const date = state.date || '';
+  const now = Date.now();
+  const lastAt = last && last.at ? new Date(last.at).getTime() : 0;
+  const shouldAppend = !last
+    || last.clientId !== CLOUD_CLIENT_ID
+    || last.staff !== staff
+    || last.date !== date
+    || (now - lastAt) > CLOUD_EDIT_HISTORY_MIN_INTERVAL_MS;
+  if(!shouldAppend) return cloudEditHistory;
+  const entry = { staff, date, at: new Date().toISOString(), clientId: CLOUD_CLIENT_ID };
+  cloudEditHistory = [...cloudEditHistory, entry].slice(-CLOUD_EDIT_HISTORY_LIMIT);
+  return cloudEditHistory;
+}
+
+function renderCloudEditHistory(){
+  const el = document.getElementById('cloudEditHistoryList');
+  if(!el) return;
+  if(!cloudEditHistory.length){
+    el.innerHTML = '<p class="hint">まだ記録がありません。</p>';
+    return;
+  }
+  el.innerHTML = cloudEditHistory.slice().reverse().map(h => {
+    const when = h.at ? new Date(h.at).toLocaleString('ja-JP') : '';
+    const staff = escapeHtml(h.staff || '(未入力)');
+    const dateLabel = h.date ? `(${escapeHtml(h.date)}の記録)` : '';
+    const mine = h.clientId === CLOUD_CLIENT_ID ? '<span class="hint">(この端末)</span>' : '';
+    return `<div class="history-row"><span class="history-date">${escapeHtml(when)}</span><span class="history-name">担当: ${staff} ${dateLabel} ${mine}</span></div>`;
+  }).join('');
+}
+
 function setCloudStatus(text, kind){
   const el = document.getElementById('cloudSyncStatus');
   if(!el) return;
@@ -2999,13 +3057,16 @@ function pushToCloud(force){
   if(!force && canonical === lastSyncedCanonical) return; // 変化がなければ書き込まない
   lastSyncedCanonical = canonical;
   setCloudStatus('☁ 同期中…', 'cloud-connecting');
+  const editHistory = computeHistoryForPush();
   cloudDocRef.set({
     storeCode: CLOUD_STORE_CODE,
     updatedBy: CLOUD_CLIENT_ID,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    payload: JSON.stringify(payload)
+    payload: JSON.stringify(payload),
+    editHistory: editHistory
   }).then(() => {
     setCloudStatus('☁ 同期済み', 'cloud-ok');
+    renderCloudEditHistory();
   }).catch(err => {
     setCloudStatus('☁ 同期エラー: ' + err.message, 'cloud-error');
   });
@@ -3038,6 +3099,10 @@ function subscribeCloud(){
     }
     cloudInitialSnapshotReceived = true;
     const doc = snapshot.data();
+    if(Array.isArray(doc.editHistory)){
+      cloudEditHistory = doc.editHistory;
+      renderCloudEditHistory();
+    }
     if(doc.updatedBy === CLOUD_CLIENT_ID){
       // 自分自身の書き込みが確定しただけ。
       setCloudStatus('☁ 同期済み', 'cloud-ok');
