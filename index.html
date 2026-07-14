@@ -275,6 +275,7 @@ table.sheet-table tr.category-row:hover td.col-today{background:#fff9c4;}
   padding:16px;margin-bottom:16px;box-shadow:var(--shadow);
 }
 .card h2{margin:0 0 6px;font-size:16px;}
+.card h3.cloud-subheading{margin:18px 0 4px;font-size:14px;padding-top:14px;border-top:1px solid var(--line);}
 .card p{margin:4px 0 12px;color:var(--ink-soft);font-size:13.5px;}
 table.master-table{width:100%;border-collapse:collapse;font-size:13px;}
 table.master-table th, table.master-table td{
@@ -702,6 +703,13 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         <span id="cloudSyncStatusInline" class="hint">状態は画面上部に表示されます。</span>
         <button type="button" class="btn" id="cloudSyncNowBtn">🔄 今すぐ同期</button>
       </div>
+      <h3 class="cloud-subheading">クラウドに名前を付けて保存</h3>
+      <p>今の内容(日付・担当者・記入内容・マスタ・レシピ表など)に名前を付けてクラウドに保存しておくと、どの端末からでも一覧から選んで開き直せます(過去の記録の参照・復元用。上のクラウド同期そのものとは別に、任意のタイミングで残すスナップショットです)。</p>
+      <div class="master-toolbar">
+        <input type="text" id="cloudSaveNameInput" class="search-box" placeholder="保存する名前(例: 7月14日_刺場)">
+        <button type="button" class="btn primary" id="cloudSaveAsBtn">☁💾 名前を付けてクラウドに保存</button>
+      </div>
+      <div id="cloudSavedRecordsList"></div>
     </div>
     <div class="card no-print">
       <h2>記録の保存 / 読み込み</h2>
@@ -2950,6 +2958,101 @@ function subscribeCloud(){
   });
 }
 
+// ---------- クラウドへの名前付き保存(過去の記録を後から開けるようにする) ----------
+// 「☁ 今すぐ同期」の対象になっている stores/main は常に"今の最新状態"を指す
+// 1つのドキュメントだが、それとは別に stores/main/savedRecords サブ
+// コレクションに、任意のタイミングで名前を付けたスナップショットを追加
+// 保存できるようにする。既存の「名前を付けて保存」(ローカルファイル書き出し)
+// と全く同じ中身(date/staff/forecast/items/masterData)を、ファイルの
+// 代わりにクラウドのドキュメントとして残す — 保存後はどの端末からでも
+// 一覧に表示され、選んで開き直せる。
+let cloudSavedRecordsCache = [];
+
+function cloudSavedRecordsCollection(){
+  return cloudDocRef.collection('savedRecords');
+}
+
+function saveNamedCloudRecord(name){
+  if(!cloudReady || !cloudDocRef){
+    setStatus('クラウドに接続されていません。');
+    return;
+  }
+  const payload = buildCloudPayload();
+  cloudSavedRecordsCollection().add({
+    storeCode: CLOUD_STORE_CODE,
+    name: name,
+    savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    payload: JSON.stringify(payload)
+  }).then(() => {
+    setStatus('クラウドに保存しました: ' + name);
+  }).catch(err => {
+    setStatus('クラウドへの保存に失敗しました: ' + err.message);
+  });
+}
+
+const CLOUD_SAVED_RECORDS_LIMIT = 50;
+
+function subscribeCloudSavedRecordsList(){
+  cloudSavedRecordsCollection().orderBy('savedAt', 'desc').limit(CLOUD_SAVED_RECORDS_LIMIT).onSnapshot(snapshot => {
+    cloudSavedRecordsCache = [];
+    snapshot.forEach(doc => cloudSavedRecordsCache.push(Object.assign({id: doc.id}, doc.data())));
+    renderCloudSavedRecordsList();
+  }, err => {
+    setStatus('クラウドの保存一覧の取得に失敗しました: ' + err.message);
+  });
+}
+
+function renderCloudSavedRecordsList(){
+  const container = document.getElementById('cloudSavedRecordsList');
+  if(!container) return;
+  if(!cloudSavedRecordsCache.length){
+    container.innerHTML = '<p class="hint">まだクラウドに名前を付けて保存された記録がありません。</p>';
+    return;
+  }
+  container.innerHTML = cloudSavedRecordsCache.map(r => {
+    // savedAtはサーバー確定前(書き込み直後の楽観的反映)だとnullのことがある。
+    const when = (r.savedAt && r.savedAt.toDate) ? r.savedAt.toDate().toLocaleString('ja-JP') : '(保存中…)';
+    return `<div class="history-row">
+      <span class="history-name">${escapeHtml(r.name || '(名前なし)')}</span>
+      <span class="history-date">${escapeHtml(when)}</span>
+      <button type="button" class="btn" data-kind="cloud-open-record" data-id="${escapeHtml(r.id)}">📂 開く</button>
+      <button type="button" class="btn danger" data-kind="cloud-delete-record" data-id="${escapeHtml(r.id)}">削除</button>
+    </div>`;
+  }).join('') + (cloudSavedRecordsCache.length >= CLOUD_SAVED_RECORDS_LIMIT ? `<p class="hint">最新${CLOUD_SAVED_RECORDS_LIMIT}件のみ表示しています。</p>` : '');
+  container.querySelectorAll('[data-kind="cloud-open-record"]').forEach(el => {
+    el.addEventListener('click', () => openCloudSavedRecord(el.dataset.id));
+  });
+  container.querySelectorAll('[data-kind="cloud-delete-record"]').forEach(el => {
+    el.addEventListener('click', () => deleteCloudSavedRecord(el.dataset.id));
+  });
+}
+
+function openCloudSavedRecord(id){
+  const rec = cloudSavedRecordsCache.find(r => r.id === id);
+  if(!rec) return;
+  if(!confirm(`「${rec.name}」を読み込みますか？今の画面の内容は置き換わります(この端末・他の端末の未保存の変更が失われる可能性があります)。`)) return;
+  try{
+    const payload = JSON.parse(rec.payload);
+    applyLoadedRecord(payload);
+    setStatus('クラウドから読み込みました: ' + rec.name);
+    // 読み込んだ内容を「今の最新状態」としてもすぐに反映しておく — そうしないと、
+    // 他の端末は次にこちらが何か編集するまでこの復元に気づけない。
+    if(typeof pushToCloud === 'function') pushToCloud(true);
+  }catch(e){
+    setStatus('読み込みに失敗しました: ' + e.message);
+  }
+}
+
+function deleteCloudSavedRecord(id){
+  const rec = cloudSavedRecordsCache.find(r => r.id === id);
+  if(!confirm(`「${rec ? rec.name : id}」をクラウドから削除しますか？(元に戻せません)`)) return;
+  cloudSavedRecordsCollection().doc(id).delete().then(() => {
+    setStatus('クラウドの記録を削除しました。');
+  }).catch(err => {
+    setStatus('削除に失敗しました: ' + err.message);
+  });
+}
+
 function initCloudSync(){
   if(typeof firebase === 'undefined'){
     // CDNから読み込めなかった(オフライン等) — クラウド同期なしで通常通り動作する。
@@ -2966,6 +3069,7 @@ function initCloudSync(){
     cloudDocRef = firebase.firestore().collection('stores').doc('main');
     cloudReady = true;
     subscribeCloud();
+    subscribeCloudSavedRecordsList();
   }).catch(err => {
     setCloudStatus('☁ 同期エラー(ログイン失敗): ' + err.message, 'cloud-error');
   });
@@ -2981,6 +3085,15 @@ document.getElementById('cloudSyncNowBtn').addEventListener('click', () => {
     return;
   }
   pushToCloud(true);
+});
+document.getElementById('cloudSaveAsBtn').addEventListener('click', () => {
+  if(!cloudReady){
+    setStatus('クラウドに接続されていません。');
+    return;
+  }
+  const nameInput = document.getElementById('cloudSaveNameInput');
+  const name = sanitizeFileName(nameInput.value) || (state.date || todayStr());
+  saveNamedCloudRecord(name);
 });
 
 // ---------- Simple PIN lock screen ----------
