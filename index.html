@@ -3091,7 +3091,14 @@ function saveNamedCloudRecord(name){
 const CLOUD_SAVED_RECORDS_LIMIT = 50;
 
 function subscribeCloudSavedRecordsList(){
-  cloudSavedRecordsCollection().orderBy('savedAt', 'desc').limit(CLOUD_SAVED_RECORDS_LIMIT).onSnapshot(snapshot => {
+  // 重要: security rules 側は resource.data.storeCode を見て許可判定しているが、
+  // Firestoreのクエリ(list)は「ルールを満たす結果しか返らないことがクエリ自体
+  // から静的に証明できる」場合しか許可されない — get(単一ドキュメント取得)と
+  // 違い、orderBy/limitだけでwhere絞り込みが無いクエリは、たとえ実際のデータが
+  // 全件条件を満たしていてもこの静的検証を通らず「Missing or insufficient
+  // permissions」で拒否される。ルール側の条件と同じ where('storeCode','==',...)
+  // をクエリにも明示的に付けることで、この検証を通過できるようにする。
+  cloudSavedRecordsCollection().where('storeCode', '==', CLOUD_STORE_CODE).orderBy('savedAt', 'desc').limit(CLOUD_SAVED_RECORDS_LIMIT).onSnapshot(snapshot => {
     cloudSavedRecordsCache = [];
     snapshot.forEach(doc => cloudSavedRecordsCache.push(Object.assign({id: doc.id}, doc.data())));
     renderCloudSavedRecordsList();
