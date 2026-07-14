@@ -2697,11 +2697,24 @@ function tryUnlock(){
       showMenuTallyError('必要なライブラリが正しく初期化されませんでした。再読み込みしてお試しください。');
       return;
     }
-    try{
-      runApp();
-    }catch(e){
-      showMenuTallyError('メニュー出数集計の起動に失敗しました: ' + e.message);
-    }
+    // クラウド接続(匿名ログイン)が完了する前にこの画面が起動してしまうと、
+    // 保存済み結果の一覧を読み込む処理(初回マウント時に1回だけ実行される)が
+    // window.storageのフォールバック(このブラウザだけのlocalStorage)を見に行ってしまい、
+    // 他の端末で保存したクラウドの結果が反映されない状態になる。
+    // そのため、cloudReadyになる(またはFirebase自体が使えない/一定時間経過した)のを
+    // 待ってからこの画面を起動する。
+    const menuTallyStartDeadline = Date.now() + 8000;
+    (function waitForCloudThenStartMenuTally(){
+      if(cloudReady || typeof firebase === 'undefined' || Date.now() > menuTallyStartDeadline){
+        try{
+          runApp();
+        }catch(e){
+          showMenuTallyError('メニュー出数集計の起動に失敗しました: ' + e.message);
+        }
+        return;
+      }
+      setTimeout(waitForCloudThenStartMenuTally, 150);
+    })();
   });
 
   /* ここから下は「メニュー出数集計」ツール本体(内部ロジックは元ファイルから変更していません) */
