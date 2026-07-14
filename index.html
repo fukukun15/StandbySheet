@@ -3016,14 +3016,32 @@ function renderCloudSavedRecordsList(){
       <span class="history-name">${escapeHtml(r.name || '(名前なし)')}</span>
       <span class="history-date">${escapeHtml(when)}</span>
       <button type="button" class="btn" data-kind="cloud-open-record" data-id="${escapeHtml(r.id)}">📂 開く</button>
+      <button type="button" class="btn" data-kind="cloud-rename-record" data-id="${escapeHtml(r.id)}">✏️ 名前を変更</button>
       <button type="button" class="btn danger" data-kind="cloud-delete-record" data-id="${escapeHtml(r.id)}">削除</button>
     </div>`;
   }).join('') + (cloudSavedRecordsCache.length >= CLOUD_SAVED_RECORDS_LIMIT ? `<p class="hint">最新${CLOUD_SAVED_RECORDS_LIMIT}件のみ表示しています。</p>` : '');
   container.querySelectorAll('[data-kind="cloud-open-record"]').forEach(el => {
     el.addEventListener('click', () => openCloudSavedRecord(el.dataset.id));
   });
+  container.querySelectorAll('[data-kind="cloud-rename-record"]').forEach(el => {
+    el.addEventListener('click', () => renameCloudSavedRecord(el.dataset.id));
+  });
   container.querySelectorAll('[data-kind="cloud-delete-record"]').forEach(el => {
     el.addEventListener('click', () => deleteCloudSavedRecord(el.dataset.id));
+  });
+}
+
+function renameCloudSavedRecord(id){
+  const rec = cloudSavedRecordsCache.find(r => r.id === id);
+  if(!rec) return;
+  const newName = prompt('新しい名前を入力してください', rec.name || '');
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed){ setStatus('名前を入力してください。'); return; }
+  cloudSavedRecordsCollection().doc(id).update({name: trimmed}).then(() => {
+    setStatus('クラウドの記録の名前を変更しました: ' + trimmed);
+  }).catch(err => {
+    setStatus('名前の変更に失敗しました: ' + err.message);
   });
 }
 
