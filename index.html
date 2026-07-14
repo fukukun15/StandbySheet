@@ -53,6 +53,8 @@ body{
 .cloud-sync-status.cloud-ok{color:#c8f5c8;}
 .cloud-sync-status.cloud-error{color:#ffd0c9;}
 .cloud-sync-status.cloud-connecting{color:rgba(255,255,255,0.85);}
+.header-status-group{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.data-source-label{font-size:11.5px;color:rgba(255,255,255,0.7);white-space:nowrap;}
 .app-header h1{
   margin:0;
   font-size:19px;
@@ -282,13 +284,22 @@ table.master-table th, table.master-table td{
   border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:middle;
 }
 table.master-table th{background:#fff;font-size:12px;color:var(--ink-soft);}
-/* table.master-table th was previously position:sticky, meant to stay pinned
-   below the sticky search box while scrolling. Removed: the surrounding
-   .table-scroll wrapper sets overflow-x:auto, which per spec implicitly
-   makes overflow-y 'auto' too (not 'visible'), turning .table-scroll into
-   its own scroll container — so the th's sticky position ended up computed
-   relative to that container instead of the page, landing at a wrong,
-   floating spot part-way down the table instead of staying at the top. */
+/* table.master-table th was previously position:sticky with a page-relative
+   top offset, meant to stay pinned below the sticky search box while
+   scrolling the page. That failed: the surrounding .table-scroll wrapper
+   sets overflow-x:auto, which per spec implicitly makes overflow-y 'auto'
+   too (not 'visible'), turning .table-scroll into its own scroll container
+   — so the th's sticky position ended up computed relative to that
+   container instead of the page. Since that container never actually
+   scrolled (its height simply grew to fit content, no internal overflow),
+   the sticky offset just sat at one fixed spot rather than tracking scroll.
+   Fixed properly this time by leaning INTO that scroll-container behavior
+   instead of fighting it: .master-scroll-wrap below is given a bounded
+   max-height so it becomes a genuinely internally-scrolling box, and the
+   header uses top:0 (relative to ITS OWN scrollport, not the page) — the
+   standard sticky-table-header-inside-a-scrolling-div pattern. */
+.master-scroll-wrap{max-height:65vh;overflow:auto;}
+table.master-table thead th{position:sticky;top:0;z-index:6;box-shadow:0 1px 0 var(--line);}
 table.master-table input[type=text], table.master-table input[type=number]{
   width:100%;min-width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12.5px;
   background:#fff;color:var(--ink);
@@ -308,6 +319,8 @@ table.master-table select[data-field="color"]{
   background:#fff;padding:8px 0;
 }
 .hint{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+.cloud-saved-select-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px;}
+.cloud-saved-select-row select{flex:1 1 220px;min-width:160px;}
 /* ---------- 予想仕込み (demand forecast) tab ---------- */
 .csv-paste-area{
   width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;
@@ -364,6 +377,12 @@ table.forecast-table th, table.forecast-table td{
 }
 table.forecast-table th{background:#fff;font-size:12px;color:var(--ink-soft);}
 table.forecast-table td.forecast-qty{font-weight:700;text-align:right;}
+table.forecast-table tbody tr, table.sheet-table tbody tr[data-station]{cursor:pointer;}
+@keyframes jumpHighlightFlash{
+  0%{background-color:#fff59d;}
+  100%{background-color:transparent;}
+}
+tr.jump-highlight{animation:jumpHighlightFlash 1.8s ease-out;}
 .history-row{
   display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);
   flex-wrap:wrap;
@@ -573,7 +592,10 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
 
 <header class="app-header">
   <h1>🍢 スタンバイシート仕込みアプリ</h1>
-  <span id="cloudSyncStatus" class="cloud-sync-status">☁ 起動中…</span>
+  <span class="header-status-group">
+    <span id="cloudSyncStatus" class="cloud-sync-status">☁ 起動中…</span>
+    <span id="dataSourceLabel" class="data-source-label"></span>
+  </span>
 </header>
 
 <nav class="tabs no-print" id="tabs"></nav>
@@ -613,7 +635,7 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         <button class="btn primary" id="addItemBtn">＋ 新しい項目を追加</button>
         <input type="text" id="masterSearchInput" class="search-box" placeholder="🔍 品名・Noで検索" autocomplete="off">
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll master-scroll-wrap">
         <table class="master-table" id="masterTable">
           <thead>
             <tr>
@@ -709,7 +731,16 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         <input type="text" id="cloudSaveNameInput" class="search-box" placeholder="保存する名前(例: 7月14日_刺場)">
         <button type="button" class="btn primary" id="cloudSaveAsBtn">☁💾 名前を付けてクラウドに保存</button>
       </div>
-      <div id="cloudSavedRecordsList"></div>
+      <div id="cloudSavedRecordsList">
+        <div class="cloud-saved-select-row">
+          <select id="cloudSavedRecordsSelect" class="search-box"></select>
+          <button type="button" class="btn primary" id="cloudOpenSelectedBtn">📂 開く</button>
+          <button type="button" class="btn" id="cloudOverwriteSelectedBtn">💾 選択中の記録に上書き保存</button>
+          <button type="button" class="btn" id="cloudRenameSelectedBtn">✏️ 名前を変更</button>
+          <button type="button" class="btn danger" id="cloudDeleteSelectedBtn">削除</button>
+        </div>
+        <p class="hint" id="cloudSavedRecordsMeta"></p>
+      </div>
     </div>
     <div class="card no-print">
       <h2>記録の保存 / 読み込み</h2>
@@ -722,9 +753,6 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
         <label class="btn" for="loadRecordFile" style="display:none;">📂 読み込む
           <input type="file" id="loadRecordFile" accept="application/json" style="display:none;">
         </label>
-        <button class="btn" id="printBtn">🖨 印刷する</button>
-        <button class="btn" id="printAllBtn">🖨🖨 全ページ一括印刷</button>
-        <button class="btn" id="previewAllBtn">🔍 全ページプレビュー</button>
         <button class="btn danger" id="resetBtn">↺ 初期データに戻す</button>
       </div>
       <p class="hint" id="statusMsg"></p>
@@ -733,6 +761,14 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
       <h2>保存データの一覧(この端末のみ)</h2>
       <p>この端末・このブラウザに残っている直近の保存履歴です(他の端末やブラウザには表示されません、キャッシュを消すと消えます)。ワンタップで読み込めます。</p>
       <div id="localHistoryList"></div>
+    </div>
+    <div class="card no-print">
+      <h2>🖨 印刷</h2>
+      <div class="master-toolbar">
+        <button class="btn" id="printBtn">🖨 印刷する</button>
+        <button class="btn" id="printAllBtn">🖨🖨 全ページ一括印刷</button>
+        <button class="btn" id="previewAllBtn">🔍 全ページプレビュー</button>
+      </div>
     </div>
   </section>
 </main>
@@ -1055,7 +1091,42 @@ function bindPanelEvents(){
   document.querySelectorAll('[data-kind="preview-page"]').forEach(el=>{
     el.addEventListener('click', ()=> previewActivePage());
   });
+  // ダブルクリックで、その行に入力されているNo.のマスタ編集行へジャンプする。
+  // ⠿(ドラッグ)/＋/×などの操作ボタン上でのダブルクリックは対象外にする。
+  document.querySelectorAll('table.sheet-table tbody tr[data-station]').forEach(tr=>{
+    tr.addEventListener('dblclick', e=>{
+      if(e.target.closest('.col-actions')) return;
+      const {station, row} = tr.dataset;
+      const st = state.items[station] && state.items[station][row];
+      const no = st ? Number(st.enteredNo) : NaN;
+      if(!st || !st.enteredNo || Number.isNaN(no)) return;
+      jumpToMasterItem(no);
+    });
+  });
   bindRowDragEvents();
+}
+
+// ①ST項目の表や③予想仕込み結果の表からのダブルクリックで呼ばれる —
+// マスタ編集タブに切り替えて、該当No.の行までスクロールし、一時的に
+// ハイライトして見つけやすくする。
+function jumpToMasterItem(no){
+  const item = DATA.master[String(no)];
+  if(!no || !item){
+    setStatus(`マスタにNo.${no}が見つかりませんでした。`);
+    return;
+  }
+  const searchInput = document.getElementById('masterSearchInput');
+  if(searchInput) searchInput.value = '';
+  state.masterSearchTerm = '';
+  state.activeTab = 'master';
+  renderAll();
+  requestAnimationFrame(() => {
+    const tr = document.querySelector(`#masterTableBody tr[data-no="${no}"]`);
+    if(!tr) return;
+    tr.scrollIntoView({behavior:'smooth', block:'center'});
+    tr.classList.add('jump-highlight');
+    setTimeout(() => tr.classList.remove('jump-highlight'), 1800);
+  });
 }
 
 // ---------- Row drag-and-drop reordering ----------
@@ -1379,6 +1450,8 @@ async function openWithPicker(){
       currentFileHandle = handle;
       currentFileName = file.name;
       updateOverwriteBtnState();
+      currentDataSourceIsExplicit = true;
+      setDataSourceLabel(file.name);
       setStatus('読み込みました: ' + file.name + '(上書き保存が使えます)');
       return;
     }catch(err){
@@ -1459,6 +1532,8 @@ document.getElementById('loadRecordFile').addEventListener('change', e=>{
       currentFileHandle = null;
       currentFileName = file.name;
       updateOverwriteBtnState();
+      currentDataSourceIsExplicit = true;
+      setDataSourceLabel(file.name);
       setStatus('読み込みました: '+file.name+'(この方法では上書き保存は使えません。名前を付けて保存をご利用ください)');
     }catch(err){ setStatus('読み込みに失敗しました: '+err.message); }
   };
@@ -2575,7 +2650,7 @@ function renderForecastResult(){
     html += '<p class="hint">レシピ表に登録済みのメニューの出数がありません。まず②レシピ表でST項目を対応づけてください。</p>';
   } else {
     html += `<table class="forecast-table"><thead><tr><th>No.</th><th>品名</th><th>単位</th><th>予想仕込み量</th><th>必要パック数</th></tr></thead><tbody>`
-      + res.resultRows.map(r => `<tr><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td><td class="forecast-qty">${r.packCount !== null ? `${r.packCount}パック<span class="hint">(1パック${escapeHtml(fmtQty(r.packSize))})</span>` : '—'}</td></tr>`).join('')
+      + res.resultRows.map(r => `<tr data-no="${r.no}" title="ダブルクリックでマスタ編集へ"><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td><td class="forecast-qty">${r.packCount !== null ? `${r.packCount}パック<span class="hint">(1パック${escapeHtml(fmtQty(r.packSize))})</span>` : '—'}</td></tr>`).join('')
       + `</tbody></table>`;
   }
   if(res.unmapped.length){
@@ -2583,6 +2658,9 @@ function renderForecastResult(){
       + `<div class="recipe-chips">` + res.unmapped.map(u => `<span class="recipe-chip" style="cursor:default;">${escapeHtml(u.name)}(平均${fmtForecastQty(u.qty)}/日)</span>`).join('') + `</div>`;
   }
   out.innerHTML = html;
+  out.querySelectorAll('table.forecast-table tbody tr[data-no]').forEach(tr => {
+    tr.addEventListener('dblclick', () => jumpToMasterItem(Number(tr.dataset.no)));
+  });
 }
 
 // ST項目のNo.から、それを使っているメニュー(と使用量)を逆引きする。
@@ -2812,6 +2890,8 @@ function checkForDraft(){
   document.getElementById('draftRestoreBtn').addEventListener('click', () => {
     applyLoadedRecord(draft);
     document.getElementById('draftBanner').style.display = 'none';
+    currentDataSourceIsExplicit = true;
+    setDataSourceLabel('自動下書き(このデバイス・未保存)');
     setStatus('自動下書きから復元しました。');
   });
   document.getElementById('draftDismissBtn').addEventListener('click', () => {
@@ -2876,12 +2956,26 @@ let lastSyncedCanonical = null;
 // 起動直後、まだクラウド側から一度も受信していない段階で早まって
 // ローカルの(まだ空の)状態を上書き送信してしまわないためのガード。
 let cloudInitialSnapshotReceived = false;
+// ユーザーが自分でローカルファイルやクラウドの名前付き記録を明示的に
+// 開いた場合はtrueにする — その場合、自分自身の同期確認だけで表示ラベルを
+// 「リアルタイム共有データ」に勝手に戻さないようにするためのフラグ。
+let currentDataSourceIsExplicit = false;
 
 function setCloudStatus(text, kind){
   const el = document.getElementById('cloudSyncStatus');
   if(!el) return;
   el.textContent = text;
   el.className = 'cloud-sync-status' + (kind ? (' ' + kind) : '');
+}
+
+// 画面上部に「今どのデータを表示しているか」を出す — ローカルファイルを
+// 開いた場合はそのファイル名、クラウドの名前付き記録を開いた場合はその
+// 記録名、他の端末の更新やクラウドの最新状態を受信した場合は「リアルタイム
+// 共有データ」と表示する。あくまで目安であり、正式なファイル管理ではない。
+function setDataSourceLabel(label){
+  const el = document.getElementById('dataSourceLabel');
+  if(!el) return;
+  el.textContent = label ? ('📄 ' + label) : '';
 }
 
 function buildCloudPayload(){
@@ -2922,6 +3016,8 @@ function applyCloudSnapshot(payload){
     applyLoadedRecord(payload);
     lastSyncedCanonical = canonicalStringify(payload);
     setCloudStatus('☁ 他の端末の更新を反映しました', 'cloud-ok');
+    currentDataSourceIsExplicit = false;
+    setDataSourceLabel('リアルタイム共有データ(自動同期)');
   }catch(e){
     setCloudStatus('☁ 受信データの読み込みに失敗しました', 'cloud-error');
   }
@@ -2937,6 +3033,7 @@ function subscribeCloud(){
       // クラウド側にまだ何もない(初回起動) — 今の内容をそのままアップロードする。
       cloudInitialSnapshotReceived = true;
       pushToCloud(true);
+      setDataSourceLabel('リアルタイム共有データ(自動同期)');
       return;
     }
     cloudInitialSnapshotReceived = true;
@@ -2944,6 +3041,7 @@ function subscribeCloud(){
     if(doc.updatedBy === CLOUD_CLIENT_ID){
       // 自分自身の書き込みが確定しただけ。
       setCloudStatus('☁ 同期済み', 'cloud-ok');
+      if(!currentDataSourceIsExplicit) setDataSourceLabel('リアルタイム共有データ(自動同期)');
       return;
     }
     let payload;
@@ -3002,38 +3100,45 @@ function subscribeCloudSavedRecordsList(){
   });
 }
 
+// 選んだ記録のidを、一覧が再描画されても(可能な限り)覚えておく。
+let cloudSavedRecordsSelectedId = null;
+
 function renderCloudSavedRecordsList(){
-  const container = document.getElementById('cloudSavedRecordsList');
-  if(!container) return;
+  const select = document.getElementById('cloudSavedRecordsSelect');
+  const meta = document.getElementById('cloudSavedRecordsMeta');
+  if(!select || !meta) return;
   if(!cloudSavedRecordsCache.length){
-    container.innerHTML = '<p class="hint">まだクラウドに名前を付けて保存された記録がありません。</p>';
+    select.innerHTML = '<option value="">(まだ保存された記録がありません)</option>';
+    select.disabled = true;
+    meta.textContent = 'クラウドに名前を付けて保存すると、ここから選んで開いたり編集したりできます。';
+    cloudSavedRecordsSelectedId = null;
     return;
   }
-  container.innerHTML = cloudSavedRecordsCache.map(r => {
-    // savedAtはサーバー確定前(書き込み直後の楽観的反映)だとnullのことがある。
-    const when = (r.savedAt && r.savedAt.toDate) ? r.savedAt.toDate().toLocaleString('ja-JP') : '(保存中…)';
-    return `<div class="history-row">
-      <span class="history-name">${escapeHtml(r.name || '(名前なし)')}</span>
-      <span class="history-date">${escapeHtml(when)}</span>
-      <button type="button" class="btn" data-kind="cloud-open-record" data-id="${escapeHtml(r.id)}">📂 開く</button>
-      <button type="button" class="btn" data-kind="cloud-rename-record" data-id="${escapeHtml(r.id)}">✏️ 名前を変更</button>
-      <button type="button" class="btn danger" data-kind="cloud-delete-record" data-id="${escapeHtml(r.id)}">削除</button>
-    </div>`;
-  }).join('') + (cloudSavedRecordsCache.length >= CLOUD_SAVED_RECORDS_LIMIT ? `<p class="hint">最新${CLOUD_SAVED_RECORDS_LIMIT}件のみ表示しています。</p>` : '');
-  container.querySelectorAll('[data-kind="cloud-open-record"]').forEach(el => {
-    el.addEventListener('click', () => openCloudSavedRecord(el.dataset.id));
-  });
-  container.querySelectorAll('[data-kind="cloud-rename-record"]').forEach(el => {
-    el.addEventListener('click', () => renameCloudSavedRecord(el.dataset.id));
-  });
-  container.querySelectorAll('[data-kind="cloud-delete-record"]').forEach(el => {
-    el.addEventListener('click', () => deleteCloudSavedRecord(el.dataset.id));
-  });
+  select.disabled = false;
+  // 選択中だったidがまだ一覧にあれば維持する。なければ先頭を選ぶ。
+  const stillExists = cloudSavedRecordsCache.some(r => r.id === cloudSavedRecordsSelectedId);
+  if(!stillExists) cloudSavedRecordsSelectedId = cloudSavedRecordsCache[0].id;
+  select.innerHTML = cloudSavedRecordsCache.map(r => {
+    const when = (r.savedAt && r.savedAt.toDate) ? r.savedAt.toDate().toLocaleString('ja-JP') : '保存中…';
+    const label = `${r.name || '(名前なし)'}(${when})`;
+    return `<option value="${escapeHtml(r.id)}"${r.id === cloudSavedRecordsSelectedId ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  }).join('');
+  if(cloudSavedRecordsCache.length >= CLOUD_SAVED_RECORDS_LIMIT){
+    meta.textContent = `最新${CLOUD_SAVED_RECORDS_LIMIT}件のみ表示しています。`;
+  }else{
+    meta.textContent = '';
+  }
+}
+
+function getSelectedCloudSavedRecord(){
+  const select = document.getElementById('cloudSavedRecordsSelect');
+  const id = select ? select.value : cloudSavedRecordsSelectedId;
+  return cloudSavedRecordsCache.find(r => r.id === id) || null;
 }
 
 function renameCloudSavedRecord(id){
   const rec = cloudSavedRecordsCache.find(r => r.id === id);
-  if(!rec) return;
+  if(!rec){ setStatus('記録を選択してください。'); return; }
   const newName = prompt('新しい名前を入力してください', rec.name || '');
   if(newName === null) return;
   const trimmed = newName.trim();
@@ -3047,11 +3152,13 @@ function renameCloudSavedRecord(id){
 
 function openCloudSavedRecord(id){
   const rec = cloudSavedRecordsCache.find(r => r.id === id);
-  if(!rec) return;
+  if(!rec){ setStatus('記録を選択してください。'); return; }
   if(!confirm(`「${rec.name}」を読み込みますか？今の画面の内容は置き換わります(この端末・他の端末の未保存の変更が失われる可能性があります)。`)) return;
   try{
     const payload = JSON.parse(rec.payload);
     applyLoadedRecord(payload);
+    currentDataSourceIsExplicit = true;
+    setDataSourceLabel(rec.name + '(クラウド保存)');
     setStatus('クラウドから読み込みました: ' + rec.name);
     // 読み込んだ内容を「今の最新状態」としてもすぐに反映しておく — そうしないと、
     // 他の端末は次にこちらが何か編集するまでこの復元に気づけない。
@@ -3061,8 +3168,28 @@ function openCloudSavedRecord(id){
   }
 }
 
+// 選んだ過去の記録を、今の画面の内容で上書き保存する(新規追加ではなく既存の
+// 記録そのものを更新する) — 「開く→編集する→同じ記録に戻す」ための機能。
+function overwriteCloudSavedRecord(id){
+  const rec = cloudSavedRecordsCache.find(r => r.id === id);
+  if(!rec){ setStatus('記録を選択してください。'); return; }
+  if(!confirm(`「${rec.name}」を、今の画面の内容で上書き保存しますか？(この記録の元の内容は失われます)`)) return;
+  const payload = buildCloudPayload();
+  cloudSavedRecordsCollection().doc(id).update({
+    payload: JSON.stringify(payload),
+    savedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => {
+    currentDataSourceIsExplicit = true;
+    setDataSourceLabel(rec.name + '(クラウド保存)');
+    setStatus('上書き保存しました: ' + rec.name);
+  }).catch(err => {
+    setStatus('上書き保存に失敗しました: ' + err.message);
+  });
+}
+
 function deleteCloudSavedRecord(id){
   const rec = cloudSavedRecordsCache.find(r => r.id === id);
+  if(!rec){ setStatus('記録を選択してください。'); return; }
   if(!confirm(`「${rec ? rec.name : id}」をクラウドから削除しますか？(元に戻せません)`)) return;
   cloudSavedRecordsCollection().doc(id).delete().then(() => {
     setStatus('クラウドの記録を削除しました。');
@@ -3075,6 +3202,7 @@ function initCloudSync(){
   if(typeof firebase === 'undefined'){
     // CDNから読み込めなかった(オフライン等) — クラウド同期なしで通常通り動作する。
     setCloudStatus('☁ オフライン(このブラウザのみで動作中)', 'cloud-error');
+    setDataSourceLabel('ローカル(このデバイスのみ)');
     return;
   }
   try{
@@ -3112,6 +3240,30 @@ document.getElementById('cloudSaveAsBtn').addEventListener('click', () => {
   const nameInput = document.getElementById('cloudSaveNameInput');
   const name = sanitizeFileName(nameInput.value) || (state.date || todayStr());
   saveNamedCloudRecord(name);
+});
+
+document.getElementById('cloudSavedRecordsSelect').addEventListener('change', e => {
+  cloudSavedRecordsSelectedId = e.target.value;
+});
+document.getElementById('cloudOpenSelectedBtn').addEventListener('click', () => {
+  const rec = getSelectedCloudSavedRecord();
+  if(!rec){ setStatus('記録を選択してください。'); return; }
+  openCloudSavedRecord(rec.id);
+});
+document.getElementById('cloudOverwriteSelectedBtn').addEventListener('click', () => {
+  const rec = getSelectedCloudSavedRecord();
+  if(!rec){ setStatus('記録を選択してください。'); return; }
+  overwriteCloudSavedRecord(rec.id);
+});
+document.getElementById('cloudRenameSelectedBtn').addEventListener('click', () => {
+  const rec = getSelectedCloudSavedRecord();
+  if(!rec){ setStatus('記録を選択してください。'); return; }
+  renameCloudSavedRecord(rec.id);
+});
+document.getElementById('cloudDeleteSelectedBtn').addEventListener('click', () => {
+  const rec = getSelectedCloudSavedRecord();
+  if(!rec){ setStatus('記録を選択してください。'); return; }
+  deleteCloudSavedRecord(rec.id);
 });
 
 // ---------- Simple PIN lock screen ----------
