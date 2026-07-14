@@ -2284,10 +2284,36 @@ function currentMenuTallySnapshot(){
   return (d && d.rows && d.rows.length) ? d : null;
 }
 
+// Firestoreは1ドキュメントあたり約1MiBのサイズ上限があり、超えると保存自体が
+// エラーになる。メニュー出数集計で行数の多いCSVを取り込んだ状態のまま記録を
+// クラウドに保存しようとすると、貼り付けた生テキスト(rawText、パース済みの
+// rowsとほぼ同じ内容を二重に持ってしまう)がかさんでこの上限を超えることが
+// あるため、大きすぎる場合は軽い方から順に外し、記録本体の保存自体は
+// 巻き添えで失敗させないようにする。ファイル保存(ローカルのJSON書き出し)には
+// この上限は無関係なので、そちらは常にcurrentMenuTallySnapshot()をそのまま使う。
+const MENU_TALLY_CLOUD_SIZE_LIMIT = 700000; // bytes。masterData/items等の分の余裕を見て少なめに設定。
+
+function byteLength(s){
+  return new Blob([s]).size;
+}
+
+function menuTallyPayloadForCloud(){
+  const full = currentMenuTallySnapshot();
+  if(!full) return { data: null, dropped: null };
+  if(byteLength(JSON.stringify(full)) <= MENU_TALLY_CLOUD_SIZE_LIMIT){
+    return { data: full, dropped: null };
+  }
+  const withoutRawText = Object.assign({}, full, { rawText: '' });
+  if(byteLength(JSON.stringify(withoutRawText)) <= MENU_TALLY_CLOUD_SIZE_LIMIT){
+    return { data: withoutRawText, dropped: 'rawText' };
+  }
+  return { data: null, dropped: 'all' };
+}
+
 function buildCloudPayload(){
   return {
     date: state.date, dayOfWeek: state.dayOfWeek, staff: state.staff, forecast: state.forecast,
-    items: state.items, masterData: DATA, menuTally: currentMenuTallySnapshot()
+    items: state.items, masterData: DATA, menuTally: menuTallyPayloadForCloud().data
   };
 }
 
@@ -2383,11 +2409,20 @@ function cloudSavedRecordsCollection(){
   return cloudDocRef.collection('savedRecords');
 }
 
+// menuTallyPayloadForCloud()のdroppedの値を、保存完了メッセージに添える
+// 補足文に変換する(データが黙って消えたように見えないようにするため)。
+function menuTallyDroppedSuffix(dropped){
+  if(dropped === 'rawText') return '(メニュー出数集計: データ量が多いため、貼り付けた元のテキストは保存されていません。集計結果自体は保存されています)';
+  if(dropped === 'all') return '(メニュー出数集計: データ量が多すぎたため、今回はクラウド保存に含まれていません。ファイル保存には含まれます)';
+  return '';
+}
+
 function saveNamedCloudRecord(name){
   if(!cloudReady || !cloudDocRef){
     setStatus('クラウドに接続されていません。');
     return;
   }
+  const menuTallyInfo = menuTallyPayloadForCloud();
   const payload = buildCloudPayload();
   cloudSavedRecordsCollection().add({
     storeCode: CLOUD_STORE_CODE,
@@ -2395,7 +2430,7 @@ function saveNamedCloudRecord(name){
     savedAt: firebase.firestore.FieldValue.serverTimestamp(),
     payload: JSON.stringify(payload)
   }).then(() => {
-    setStatus('クラウドに保存しました: ' + name);
+    setStatus('クラウドに保存しました: ' + name + menuTallyDroppedSuffix(menuTallyInfo.dropped));
   }).catch(err => {
     setStatus('クラウドへの保存に失敗しました: ' + err.message);
   });
@@ -2501,6 +2536,7 @@ function overwriteCloudSavedRecord(id){
   const rec = cloudSavedRecordsCache.find(r => r.id === id);
   if(!rec){ setStatus('記録を選択してください。'); return; }
   if(!confirm(`「${rec.name}」を、今の画面の内容で上書き保存しますか？(この記録の元の内容は失われます)`)) return;
+  const menuTallyInfo = menuTallyPayloadForCloud();
   const payload = buildCloudPayload();
   cloudSavedRecordsCollection().doc(id).update({
     payload: JSON.stringify(payload),
@@ -2508,7 +2544,7 @@ function overwriteCloudSavedRecord(id){
   }).then(() => {
     currentDataSourceIsExplicit = true;
     setDataSourceLabel(rec.name + '(クラウド保存)');
-    setStatus('上書き保存しました: ' + rec.name);
+    setStatus('上書き保存しました: ' + rec.name + menuTallyDroppedSuffix(menuTallyInfo.dropped));
   }).catch(err => {
     setStatus('上書き保存に失敗しました: ' + err.message);
   });
