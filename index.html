@@ -640,80 +640,30 @@ body.locked .app-header, body.locked .tabs, body.locked main{display:none !impor
           <thead>
             <tr>
               <th>No.</th><th>品名</th><th>賞味期限</th><th>単位</th>
-              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th title="予想仕込みタブで「必要パック数」を計算する際に使います(例: もも串が1パック50本入りなら50と入力)">1パックの数量</th><th>色</th><th>期間限定</th><th></th>
+              <th>15万</th><th>25万(水曜)</th><th>50万(週末)</th><th title="1パックあたりの入数の目安(例: もも串が1パック50本入りなら50と入力)">1パックの数量</th><th>色</th><th>期間限定</th><th></th>
             </tr>
           </thead>
           <tbody id="masterTableBody"></tbody>
         </table>
       </div>
     </div>
+    <div class="card no-print">
+      <h2>マスタデータの保存 / 読み込み</h2>
+      <p>品目マスタをまとめて1つのファイルに保存します(日々のチェックリストの記入内容は含みません)。他の店舗・他の端末へ品目マスタを移す時などに使えます。</p>
+      <div class="master-toolbar">
+        <button type="button" class="btn primary" id="saveMasterRecipeBtn">💾 マスタデータを保存</button>
+        <button type="button" class="btn" id="loadMasterRecipeBtn">📂 マスタデータを読み込む</button>
+        <input type="file" id="loadMasterRecipeFile" accept="application/json" style="display:none;">
+      </div>
+      <span class="hint" id="masterRecipeIoStatus"></span>
+    </div>
   </section>
 
   <section class="panel" id="panel-forecast">
-    <div class="card no-print">
-      <h2>① 出数CSVの取り込み</h2>
-      <p>POSレジから出力した「出数」CSVの中身をそのまま貼り付けてください(1行目が項目名の行のままでOKです)。同じ営業日が含まれるCSVを貼り直すと、その日のデータだけ新しい内容で上書きされます。何回かに分けて貼り付けていくことで、日々の実績を積み上げられます。</p>
-      <textarea id="salesCsvPaste" class="csv-paste-area" rows="6" placeholder="ここにCSVの内容を貼り付けてください"></textarea>
-      <div class="master-toolbar">
-        <button type="button" class="btn primary" id="importCsvBtn">📥 このCSVを取り込む</button>
-        <label class="btn" for="salesCsvFile">📂 CSVファイルを選択
-          <!-- No accept= filter: some OS file dialogs grey out (make
-               unselectable) files whose extension/MIME the browser doesn't
-               recognize as an exact match for ".csv"/"text/csv" — Japanese
-               POS exports have shown up as things like "CSV" (uppercase),
-               ".txt", or an Excel-flavored MIME type. Leaving accept unset
-               means every file is always selectable; a wrong pick just
-               fails to parse (and shows the usual error message) rather
-               than silently blocking selection. -->
-          <input type="file" id="salesCsvFile" style="display:none;">
-        </label>
-        <span class="hint" id="csvImportStatus"></span>
+    <div class="card no-print" id="menuTallyCard">
+      <div id="menuTallyRoot">
+        <p class="hint">読み込み中です。初回はライブラリのダウンロードのためインターネット接続が必要です…</p>
       </div>
-    </div>
-
-    <div class="card no-print">
-      <h2>取り込み済みの実績</h2>
-      <p>営業日ごとの実績です。客数は「お通し」＋「お子様飲放」の出数の合計、売上はその日に取り込んだ全メニューの売上金額の合計です。</p>
-      <div id="salesHistoryList"></div>
-    </div>
-
-    <div class="card no-print">
-      <h2>② レシピ表(メニュー ⇔ ST項目の対応)</h2>
-      <p>1つの料理が複数のST項目からできている場合は、必要なST項目を複数行、使用量とあわせて登録してください(例: 焼鳥5種盛 → 対応する各串を1本ずつ)。ST項目は「マスタ編集」タブで登録したNo.で指定します。まだ対応づけていないメニューは出数の多い順に並びます。品名がマスタの品名と似ている場合は「候補」として自動で表示されるので、ワンクリックで採用できます。</p>
-      <div class="master-toolbar">
-        <button type="button" class="btn primary" id="saveMasterRecipeBtn">💾 マスタ・レシピ表を保存</button>
-        <button type="button" class="btn" id="loadMasterRecipeBtn">📂 マスタ・レシピ表を読み込む</button>
-        <input type="file" id="loadMasterRecipeFile" accept="application/json" style="display:none;">
-        <span class="hint" id="masterRecipeIoStatus">品目マスタ・レシピ表・取り込み済みの売上実績をまとめて1つのファイルに保存します(日々のチェックリストの記入内容は含みません)。「マスタ編集」タブの内容も一緒に保存されます。</span>
-      </div>
-      <div class="master-toolbar">
-        <input type="text" id="recipeSearchInput" class="search-box" placeholder="🔍 メニュー名で検索" autocomplete="off">
-        <button type="button" class="btn" id="recipeBulkMatchBtn">⚡ 完全一致の候補を一括採用</button>
-        <label class="tag-toggle" style="margin-left:auto;"><input type="checkbox" id="recipeUnmappedOnlyChk"> 未設定のみ表示</label>
-      </div>
-      <div class="master-toolbar" id="recipeDeptFilter"></div>
-      <div id="recipeList"></div>
-    </div>
-
-    <div class="card no-print">
-      <h2>③ ST項目からメニューを逆引き</h2>
-      <p>ST項目のNo.を指定すると、そのNo.が使われているメニューと使用量の一覧を表示します(このNo.を減らしたい・見直したい時にどのメニューに影響するか確認できます)。</p>
-      <div class="master-toolbar">
-        <input type="text" id="reverseLookupNoInput" class="search-box" list="itemOptions" placeholder="No.を入力(例:145)" autocomplete="off">
-      </div>
-      <div id="reverseLookupResult"></div>
-    </div>
-
-    <div class="card no-print">
-      <h2>④ 予想仕込みを計算</h2>
-      <p>取り込んだ実績×レシピ表をもとに、目標の売上予測または客数を入力するとその比率でST項目ごとの仕込み量を計算します。「同じ曜日の実績を参考表示」を選ぶと、指定した曜日の実績をそのまま(倍率をかけずに)表示します。ここでの結果は表示のみで、各持ち場のチェックリストには反映されません。</p>
-      <div class="master-toolbar" id="forecastModeToolbar">
-        <label class="tag-toggle"><input type="radio" name="forecastMode" value="sales" checked> 売上予測(万円)から</label>
-        <label class="tag-toggle"><input type="radio" name="forecastMode" value="customers"> 客数から</label>
-        <label class="tag-toggle"><input type="radio" name="forecastMode" value="weekday"> 同じ曜日の実績を参考表示</label>
-      </div>
-      <div class="master-toolbar" id="forecastInputToolbar"></div>
-      <div id="forecastResult"></div>
     </div>
   </section>
 
@@ -866,7 +816,7 @@ function buildTabs(){
   wrap.innerHTML = '';
   const defs = [...DATA.stations.map(s=>({id:s.id,name:s.name,kind:'station'})),
                 {id:'master', name:'マスタ編集', kind:'meta'},
-                {id:'forecast', name:'予想仕込み', kind:'meta'},
+                {id:'forecast', name:'メニュー出数集計', kind:'meta'},
                 {id:'records', name:'記録・保存', kind:'meta'}];
   defs.forEach(d => {
     const b = document.createElement('button');
@@ -2039,683 +1989,9 @@ function renderAll(){
   buildTabs();
   renderStationPanels();
   renderMasterTable();
-  renderForecastTab();
   showActivePanel();
   buildItemDatalist();
   updateStickyOffsets();
-}
-
-// ---------- 予想仕込み (demand forecast) ----------
-// Pipeline: paste/upload a POS 出数 CSV export -> parse & aggregate into
-// DATA.salesHistory (per business day: customer count, total sales, per-menu
-// qty) -> the person maps each menu name to one or more ST items (master
-// Nos) with a per-order usage quantity in DATA.recipes -> the 予想仕込み
-// calculator multiplies historical per-menu averages by recipe quantities,
-// scaled by a target 売上予測/客数 ratio (or shown as-is for a matching
-// weekday), to estimate ST-item prep quantities. Results are DISPLAY ONLY —
-// nothing here writes into the station checklists themselves.
-
-function parseCSVText(text){
-  // Minimal RFC4180-ish CSV parser: handles quoted fields (with embedded
-  // commas/newlines/escaped "" quotes) as well as plain unquoted fields.
-  // POS exports of this kind haven't needed quoting in practice, but this
-  // is cheap insurance against a stray comma inside a menu name.
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  for(let i=0;i<text.length;i++){
-    const c = text[i];
-    if(inQuotes){
-      if(c === '"'){
-        if(text[i+1] === '"'){ field += '"'; i++; }
-        else { inQuotes = false; }
-      } else {
-        field += c;
-      }
-    } else {
-      if(c === '"'){ inQuotes = true; }
-      else if(c === ','){ row.push(field); field = ''; }
-      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
-      else if(c === '\r'){ /* skip — \r\n line endings handled via the \n branch */ }
-      else field += c;
-    }
-  }
-  if(field !== '' || row.length){ row.push(field); rows.push(row); }
-  return rows;
-}
-
-function normalizeSalesDate(raw){
-  const s = String(raw == null ? '' : raw).trim();
-  let m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
-  return null;
-}
-
-function parseSalesNum(s){
-  if(s === undefined || s === null) return 0;
-  const n = parseFloat(String(s).replace(/,/g,'').trim());
-  return Number.isFinite(n) ? n : 0;
-}
-
-const WEEKDAY_LABELS = ['日','月','火','水','木','金','土'];
-function dowLabel(dow){ return WEEKDAY_LABELS[dow] || ''; }
-
-// Parses the pasted/uploaded CSV text and merges it into DATA.salesHistory,
-// keyed by normalized business date ("2026-07-08"). Re-importing a CSV that
-// contains a date already present replaces just that date's data (so the
-// person can paste corrected/updated exports without duplicating totals),
-// while other already-imported dates are left untouched.
-function importSalesCsv(text){
-  const rows = parseCSVText(text).filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
-  if(rows.length < 2){
-    return {ok:false, message:'CSVの内容が読み取れませんでした。1行目が項目名、2行目以降がデータの形式で貼り付けてください。'};
-  }
-  const header = rows[0].map(h => h.trim());
-  const REQUIRED = ['営業日','部門名','メニュー名称','単価','売上金額','売上数量'];
-  const idx = {};
-  REQUIRED.forEach(name => { idx[name] = header.indexOf(name); });
-  const missing = REQUIRED.filter(name => idx[name] === -1);
-  if(missing.length){
-    return {ok:false, message:'必要な列が見つかりません(' + missing.join('、') + ')。POSの「出数」CSVをそのまま貼り付けてください。'};
-  }
-  const delFlagIdx = header.indexOf('削除フラグ');
-  const byDate = {};
-  let rowCount = 0;
-  for(let r=1;r<rows.length;r++){
-    const cols = rows[r];
-    if(cols.length < 2) continue;
-    if(delFlagIdx !== -1 && String(cols[delFlagIdx]||'').trim() === '1') continue;
-    const dateKey = normalizeSalesDate(cols[idx['営業日']]);
-    if(!dateKey) continue;
-    const name = String(cols[idx['メニュー名称']] || '').trim();
-    if(!name) continue;
-    const dept = String(cols[idx['部門名']] || '').trim();
-    const unitPrice = parseSalesNum(cols[idx['単価']]);
-    const amount = parseSalesNum(cols[idx['売上金額']]);
-    const qty = parseSalesNum(cols[idx['売上数量']]);
-    if(!byDate[dateKey]) byDate[dateKey] = {items:{}, totalSales:0, otoshi:0, kids:0};
-    const day = byDate[dateKey];
-    day.totalSales += amount;
-    if(!day.items[name]) day.items[name] = {qty:0, unitPrice:unitPrice, dept:dept};
-    day.items[name].qty += qty;
-    if(unitPrice) day.items[name].unitPrice = unitPrice;
-    if(dept) day.items[name].dept = dept;
-    if(name === 'お通し') day.otoshi += qty;
-    if(name === 'お子様飲放') day.kids += qty;
-    rowCount++;
-  }
-  const dateKeys = Object.keys(byDate);
-  if(!dateKeys.length){
-    return {ok:false, message:'有効な営業日のデータが見つかりませんでした。'};
-  }
-  dateKeys.forEach(dateKey => {
-    const day = byDate[dateKey];
-    const [y,m,d] = dateKey.split('-').map(Number);
-    DATA.salesHistory[dateKey] = {
-      date: dateKey,
-      dow: new Date(y, m-1, d).getDay(),
-      customerCount: day.otoshi + day.kids,
-      totalSales: day.totalSales,
-      items: day.items
-    };
-  });
-  dateKeys.sort();
-  return {ok:true, message:`取り込みました: ${dateKeys.join('、')}(${rowCount}行)`, dates: dateKeys};
-}
-
-function renderSalesHistoryList(){
-  const container = document.getElementById('salesHistoryList');
-  if(!container) return;
-  const dateKeys = Object.keys(DATA.salesHistory).sort();
-  if(!dateKeys.length){
-    container.innerHTML = '<p class="hint">まだ取り込まれていません。上のCSV貼り付け欄からデータを取り込んでください。</p>';
-    return;
-  }
-  container.innerHTML = dateKeys.map(dk => {
-    const day = DATA.salesHistory[dk];
-    return `<div class="history-row">
-      <span class="history-name">${escapeHtml(dk)}(${dowLabel(day.dow)}) — 客数 ${fmtQty(day.customerCount)}人 / 売上 ${(day.totalSales/10000).toFixed(1)}万円</span>
-      <button type="button" class="btn danger" data-kind="delete-sales-day" data-date="${escapeHtml(dk)}">削除</button>
-    </div>`;
-  }).join('');
-  container.querySelectorAll('[data-kind="delete-sales-day"]').forEach(el => {
-    el.addEventListener('click', () => {
-      delete DATA.salesHistory[el.dataset.date];
-      renderSalesHistoryList();
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-}
-
-// Union of every menu name seen across all imported business days, with
-// aggregated total qty (for sorting by popularity) and the most recently
-// seen department (for context only).
-function allSalesMenuNames(){
-  const map = {};
-  Object.values(DATA.salesHistory).forEach(day => {
-    Object.keys(day.items).forEach(name => {
-      if(!map[name]) map[name] = {totalQty:0, dept:day.items[name].dept};
-      map[name].totalQty += day.items[name].qty;
-      if(day.items[name].dept) map[name].dept = day.items[name].dept;
-    });
-  });
-  return map;
-}
-
-// ---------- 部門で除外(レシピ対応が不要な部門を丸ごと隠す) ----------
-// ドリンク/のみ放題は仕込みチェックリストと無関係なことが多いので、初めて
-// 見る部門はこの2つだけ既定でOFF(除外)、それ以外は既定でON(表示)とする。
-// 実際のON/OFFはDATA.recipeDeptFilterに永続化するので、一度触ればそれ以降
-// 毎回同じ状態になる(保存ファイル・下書きにも乗る)。
-const DEFAULT_EXCLUDED_DEPTS = ['ドリンク','のみ放題'];
-
-function isDeptIncluded(dept){
-  if(!dept) return true;
-  if(!DATA.recipeDeptFilter) DATA.recipeDeptFilter = {};
-  if(!(dept in DATA.recipeDeptFilter)){
-    DATA.recipeDeptFilter[dept] = !DEFAULT_EXCLUDED_DEPTS.includes(dept);
-  }
-  return DATA.recipeDeptFilter[dept];
-}
-
-function distinctSalesDepts(){
-  const set = new Set();
-  Object.values(DATA.salesHistory).forEach(day => {
-    Object.values(day.items).forEach(it => { if(it.dept) set.add(it.dept); });
-  });
-  return Array.from(set).sort();
-}
-
-function renderRecipeDeptFilter(){
-  const wrap = document.getElementById('recipeDeptFilter');
-  if(!wrap) return;
-  const depts = distinctSalesDepts();
-  if(!depts.length){ wrap.innerHTML = ''; return; }
-  wrap.innerHTML = '<span class="hint" style="margin-right:4px;">表示する部門:</span>' + depts.map(d => {
-    const checked = isDeptIncluded(d);
-    return `<label class="tag-toggle"><input type="checkbox" data-kind="dept-filter-chk" data-dept="${escapeHtml(d)}"${checked ? ' checked' : ''}> ${escapeHtml(d)}</label>`;
-  }).join('');
-  wrap.querySelectorAll('[data-kind="dept-filter-chk"]').forEach(el => {
-    el.addEventListener('change', () => {
-      if(!DATA.recipeDeptFilter) DATA.recipeDeptFilter = {};
-      DATA.recipeDeptFilter[el.dataset.dept] = el.checked;
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-}
-
-// ---------- 自動マッチング候補(名前の類似からST項目を提案) ----------
-// POSのメニュー名称とマスタの品名は、"解)★"、"ST)"、"清)" のような接頭辞や
-// 全角スペース・カッコ書きの分量メモがあるかどうかだけが違い、中心の名前は
-// 一致していることが多い。ここではそれらを取り除いた上で完全一致(strong)・
-// 部分一致(weak)を候補として拾う — あくまで「候補」であり、採用は必ず
-// ワンクリックの確認を経る(一括採用ボタンのみ完全一致を自動適用する)。
-function normalizeItemNameForMatch(raw){
-  let s = String(raw || '');
-  s = s.replace(/^[^)）]{0,4}[)）]/, ''); // leading "解)" / "ST)" / "清)" 等の接頭辞
-  s = s.replace(/[★☆●○◎]/g, '');
-  s = s.replace(/[\(（][^)）]*[\)）]/g, ''); // カッコ書きの注記
-  s = s.replace(/[\s　]+/g, '');
-  return s.trim();
-}
-
-function findRecipeMatchCandidates(menuName){
-  const normMenu = normalizeItemNameForMatch(menuName);
-  if(!normMenu) return [];
-  const candidates = [];
-  Object.keys(DATA.master).forEach(noStr => {
-    const item = DATA.master[noStr];
-    if(!item || item.isHeader || item.isNote || !item.name) return;
-    const normItem = normalizeItemNameForMatch(item.name);
-    if(!normItem) return;
-    let score = 0;
-    if(normItem === normMenu) score = 3;
-    else if(normMenu.length >= 2 && (normItem.includes(normMenu) || normMenu.includes(normItem))) score = 2;
-    if(score > 0) candidates.push({no:Number(noStr), name:item.name, score});
-  });
-  candidates.sort((a,b) => b.score - a.score || a.no - b.no);
-  return candidates.slice(0,3);
-}
-
-// 現在絞り込み条件に合致する「未設定」メニューのうち、完全一致(score 3)の
-// 候補があるものだけを自動で採用する。部分一致は誤爆の可能性があるため対象外。
-function bulkApplyExactSuggestions(){
-  const menuMap = allSalesMenuNames();
-  let applied = 0;
-  Object.keys(menuMap).forEach(name => {
-    if(DATA.recipes[name] && DATA.recipes[name].length) return;
-    if(!isDeptIncluded(menuMap[name].dept)) return;
-    const candidates = findRecipeMatchCandidates(name);
-    const exact = candidates.find(c => c.score === 3);
-    if(exact){
-      DATA.recipes[name] = [{no:exact.no, qty:1}];
-      applied++;
-    }
-  });
-  return applied;
-}
-
-const RECIPE_LIST_LIMIT = 80;
-
-function renderRecipeList(){
-  const container = document.getElementById('recipeList');
-  if(!container) return;
-  renderRecipeDeptFilter();
-  const searchInput = document.getElementById('recipeSearchInput');
-  const unmappedChk = document.getElementById('recipeUnmappedOnlyChk');
-  const searchTerm = searchInput ? searchInput.value.trim() : '';
-  const unmappedOnly = unmappedChk ? unmappedChk.checked : false;
-  const menuMap = allSalesMenuNames();
-  let names = Object.keys(menuMap);
-  names = names.filter(n => isDeptIncluded(menuMap[n].dept));
-  if(searchTerm) names = names.filter(n => n.includes(searchTerm));
-  if(unmappedOnly) names = names.filter(n => !DATA.recipes[n] || DATA.recipes[n].length === 0);
-  names.sort((a,b) => menuMap[b].totalQty - menuMap[a].totalQty);
-  if(!names.length){
-    container.innerHTML = '<p class="hint">該当するメニューがありません。まずCSVを取り込んでください(部門の表示設定もご確認ください)。</p>';
-    return;
-  }
-  const shown = names.slice(0, RECIPE_LIST_LIMIT);
-  container.innerHTML = shown.map(name => recipeRowHtml(name, menuMap[name])).join('')
-    + (names.length > RECIPE_LIST_LIMIT ? `<p class="hint">他 ${names.length - RECIPE_LIST_LIMIT} 件あります。検索で絞り込んでください。</p>` : '');
-  bindRecipeEvents();
-}
-
-function recipeRowHtml(name, info){
-  const mappings = DATA.recipes[name] || [];
-  const chipsHtml = mappings.map((m,i) => {
-    const item = DATA.master[String(m.no)];
-    const itemName = item ? item.name : '(不明な品番)';
-    return `<span class="recipe-chip">No.${m.no} ${escapeHtml(itemName)} ×<input type="text" inputmode="decimal" class="recipe-chip-qty" data-kind="recipe-edit-qty" data-menu="${escapeHtml(name)}" data-idx="${i}" value="${escapeHtml(fmtQty(m.qty))}"><button type="button" class="recipe-chip-del" data-kind="recipe-del" data-menu="${escapeHtml(name)}" data-idx="${i}" title="この対応づけを削除">×</button></span>`;
-  }).join('');
-  let suggestHtml = '';
-  if(!mappings.length){
-    const candidates = findRecipeMatchCandidates(name);
-    if(candidates.length){
-      suggestHtml = `<div class="recipe-suggest">候補: ` + candidates.map(c =>
-        `<button type="button" class="recipe-suggest-btn" data-kind="recipe-suggest-btn" data-menu="${escapeHtml(name)}" data-no="${c.no}">No.${c.no} ${escapeHtml(c.name)}${c.score===3 ? '(完全一致)' : ''} を採用</button>`
-      ).join('') + `</div>`;
-    }
-  }
-  return `<div class="recipe-row" data-menu="${escapeHtml(name)}">
-    <div class="recipe-row-head">
-      <span class="recipe-name">${escapeHtml(name)}</span>
-      <span class="recipe-qty-badge">合計出数 ${fmtQty(info.totalQty)}${info.dept ? ' / ' + escapeHtml(info.dept) : ''}</span>
-    </div>
-    <div class="recipe-chips">${chipsHtml || '<span class="hint">未設定</span>'}</div>
-    ${suggestHtml}
-    <div class="recipe-add-row">
-      <input type="text" class="recipe-add-no" data-kind="recipe-add-no" data-menu="${escapeHtml(name)}" list="itemOptions" placeholder="No.(ST項目)" autocomplete="off">
-      <input type="text" inputmode="decimal" class="recipe-add-qty" data-kind="recipe-add-qty" data-menu="${escapeHtml(name)}" placeholder="使用量(例:1)" autocomplete="off">
-      <span class="recipe-qty-presets">${[0.5,1,2,3].map(v => `<button type="button" class="recipe-preset-btn" data-kind="recipe-qty-preset" data-menu="${escapeHtml(name)}" data-val="${v}">${v}</button>`).join('')}</span>
-      <button type="button" class="btn" data-kind="recipe-add-btn" data-menu="${escapeHtml(name)}">＋ 追加</button>
-      <button type="button" class="btn" data-kind="recipe-multi-toggle">🧩 複数の食材から選んで追加</button>
-    </div>
-    <div class="recipe-multi-picker" data-kind="recipe-multi-picker" style="display:none;">
-      <div class="recipe-multi-search-row">
-        <input type="text" class="search-box recipe-multi-search" data-kind="recipe-multi-search" placeholder="🔍 品名・Noで検索(複数選択できます)" autocomplete="off">
-        <span class="hint">使用量(共通)<input type="text" inputmode="decimal" class="recipe-multi-qty" data-kind="recipe-multi-qty" value="1"></span>
-        <button type="button" class="btn primary" data-kind="recipe-multi-add">選択した食材をまとめて追加</button>
-        <span class="hint" data-kind="recipe-multi-count">0件選択中</span>
-      </div>
-      <div class="recipe-multi-list" data-kind="recipe-multi-list"></div>
-    </div>
-  </div>`;
-}
-
-// ---------- 複数の食材をまとめて選んで追加(焼鳥5種盛のような組み合わせ料理向け) ----------
-// 選択中のNo.はメニュー名ごとにここで保持する(DATAには「まとめて追加」ボタン
-// を押した時だけ書き込む)。検索語を変えても選択済みのチェックが消えないよう、
-// 表示中のチェックボックスの状態そのものではなく、この外部Setを正としている。
-const multiPickerSelections = {};
-function getMultiPickerSelection(menu){
-  if(!multiPickerSelections[menu]) multiPickerSelections[menu] = new Set();
-  return multiPickerSelections[menu];
-}
-
-function renderMultiPickerList(row){
-  const menu = row.dataset.menu;
-  const listEl = row.querySelector('[data-kind="recipe-multi-list"]');
-  const searchInput = row.querySelector('.recipe-multi-search');
-  const term = searchInput ? searchInput.value.trim() : '';
-  if(!listEl) return;
-  if(!term){
-    listEl.innerHTML = '<p class="hint">品名またはNo.で検索してください(複数の食材にチェックを付けられます)。</p>';
-    return;
-  }
-  const selection = getMultiPickerSelection(menu);
-  const alreadyMapped = new Set((DATA.recipes[menu]||[]).map(m => m.no));
-  const nos = Object.keys(DATA.master).map(Number).filter(no => {
-    const item = DATA.master[String(no)];
-    if(!item || item.isHeader || item.isNote || !item.name) return false;
-    return String(no).includes(term) || item.name.includes(term);
-  }).sort((a,b) => a-b);
-  if(!nos.length){
-    listEl.innerHTML = '<p class="hint">該当する品目が見つかりません。</p>';
-    return;
-  }
-  const MULTI_PICKER_LIMIT = 40;
-  const shown = nos.slice(0, MULTI_PICKER_LIMIT);
-  listEl.innerHTML = shown.map(no => {
-    const item = DATA.master[String(no)];
-    const checked = selection.has(no);
-    const already = alreadyMapped.has(no);
-    return `<label class="recipe-multi-item${already ? ' already-mapped' : ''}"${already ? ' title="この食材はすでに登録済みです(追加すると新しい行として増えます)"' : ''}><input type="checkbox" data-kind="recipe-multi-chk" data-no="${no}"${checked ? ' checked' : ''}> No.${no} ${escapeHtml(item.name)}</label>`;
-  }).join('') + (nos.length > MULTI_PICKER_LIMIT ? `<p class="hint">他 ${nos.length - MULTI_PICKER_LIMIT} 件あります。検索を絞り込んでください。</p>` : '');
-  row.querySelectorAll('[data-kind="recipe-multi-chk"]').forEach(chk => {
-    chk.addEventListener('change', () => {
-      const no = Number(chk.dataset.no);
-      if(chk.checked) selection.add(no); else selection.delete(no);
-      updateMultiPickerCount(row);
-    });
-  });
-  updateMultiPickerCount(row);
-}
-
-function updateMultiPickerCount(row){
-  const menu = row.dataset.menu;
-  const countEl = row.querySelector('[data-kind="recipe-multi-count"]');
-  if(countEl) countEl.textContent = `${getMultiPickerSelection(menu).size}件選択中`;
-}
-
-function bindRecipeEvents(){
-  document.querySelectorAll('[data-kind="recipe-multi-toggle"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const row = el.closest('.recipe-row');
-      const picker = row.querySelector('[data-kind="recipe-multi-picker"]');
-      const willOpen = picker.style.display === 'none' || !picker.style.display;
-      picker.style.display = willOpen ? 'block' : 'none';
-      if(willOpen){
-        renderMultiPickerList(row);
-        const searchInput = row.querySelector('.recipe-multi-search');
-        if(searchInput) searchInput.focus();
-      }
-    });
-  });
-  document.querySelectorAll('.recipe-multi-search').forEach(el => {
-    el.addEventListener('input', () => renderMultiPickerList(el.closest('.recipe-row')));
-  });
-  document.querySelectorAll('[data-kind="recipe-multi-add"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const row = el.closest('.recipe-row');
-      const menu = row.dataset.menu;
-      const selection = getMultiPickerSelection(menu);
-      if(!selection.size){
-        setStatus('食材を1つ以上選択してください。');
-        return;
-      }
-      const qtyInput = row.querySelector('.recipe-multi-qty');
-      const qty = parseFloat((qtyInput.value||'').trim());
-      if(!qty || qty <= 0){
-        setStatus('使用量は0より大きい数値で入力してください。');
-        return;
-      }
-      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
-      const already = new Set(DATA.recipes[menu].map(m => m.no));
-      let added = 0;
-      selection.forEach(no => {
-        if(already.has(no)) return; // 登録済みのNo.は二重登録しない(既存の使用量を変えたい場合はチップ側で編集)
-        DATA.recipes[menu].push({no, qty});
-        added++;
-      });
-      selection.clear();
-      setStatus(added > 0 ? `${added}件のST項目をまとめて追加しました。` : '選択した食材はすでにすべて登録済みでした。');
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-  document.querySelectorAll('[data-kind="recipe-del"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const menu = el.dataset.menu;
-      const idx = Number(el.dataset.idx);
-      if(DATA.recipes[menu]){
-        DATA.recipes[menu].splice(idx,1);
-        if(!DATA.recipes[menu].length) delete DATA.recipes[menu];
-      }
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-  // 使用量をその場で編集(以前は削除して登録し直す必要があった)。DOM構造は
-  // 変わらないので renderRecipeList() は呼ばず、入力中のフォーカスを保った
-  // まま裏側のデータと計算結果だけを更新する。
-  document.querySelectorAll('[data-kind="recipe-edit-qty"]').forEach(el => {
-    el.addEventListener('change', () => {
-      const menu = el.dataset.menu;
-      const idx = Number(el.dataset.idx);
-      const entry = DATA.recipes[menu] && DATA.recipes[menu][idx];
-      if(!entry) return;
-      const qty = parseFloat(el.value.trim());
-      if(!qty || qty <= 0){
-        setStatus('使用量は0より大きい数値で入力してください。');
-        el.value = fmtQty(entry.qty);
-        return;
-      }
-      entry.qty = qty;
-      renderForecastResult();
-    });
-  });
-  document.querySelectorAll('[data-kind="recipe-qty-preset"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const row = el.closest('.recipe-row');
-      const qtyInput = row.querySelector('[data-kind="recipe-add-qty"]');
-      if(qtyInput) qtyInput.value = el.dataset.val;
-    });
-  });
-  document.querySelectorAll('[data-kind="recipe-suggest-btn"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const menu = el.dataset.menu;
-      const no = Number(el.dataset.no);
-      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
-      DATA.recipes[menu].push({no, qty:1});
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-  document.querySelectorAll('[data-kind="recipe-add-btn"]').forEach(el => {
-    el.addEventListener('click', () => {
-      const menu = el.dataset.menu;
-      const row = el.closest('.recipe-row');
-      const noInput = row.querySelector('[data-kind="recipe-add-no"]');
-      const qtyInput = row.querySelector('[data-kind="recipe-add-qty"]');
-      const no = Number(noInput.value.trim());
-      const qty = parseFloat(qtyInput.value.trim());
-      if(!no || !DATA.master[String(no)]){
-        setStatus('存在するNo.を入力してください。');
-        return;
-      }
-      if(!qty || qty <= 0){
-        setStatus('使用量は0より大きい数値で入力してください。');
-        return;
-      }
-      if(!DATA.recipes[menu]) DATA.recipes[menu] = [];
-      DATA.recipes[menu].push({no, qty});
-      renderRecipeList();
-      renderForecastResult();
-    });
-  });
-}
-
-function forecastMode(){
-  const el = document.querySelector('input[name="forecastMode"]:checked');
-  return el ? el.value : 'sales';
-}
-
-// Rebuilds just the target-input area for whichever mode is selected. Called
-// once at page load, and again whenever the mode radio changes — deliberately
-// NOT called from renderForecastTab()/renderAll(), since that runs on every
-// tab switch and would otherwise wipe out whatever the person is mid-typing
-// into the target field.
-function renderForecastInputArea(){
-  const wrap = document.getElementById('forecastInputToolbar');
-  if(!wrap) return;
-  const mode = forecastMode();
-  if(mode === 'sales'){
-    wrap.innerHTML = `<span class="banner-text">目標売上予測<input type="text" id="forecastTargetInput" class="underline-input forecast-underline" placeholder="例: 30" value="${escapeHtml((state && state.forecast) || '')}">万円</span>`;
-  } else if(mode === 'customers'){
-    wrap.innerHTML = `<span class="banner-text">目標客数<input type="text" id="forecastTargetInput" class="underline-input forecast-underline" placeholder="例: 80">人</span>`;
-  } else {
-    wrap.innerHTML = `<span class="banner-text">曜日<select id="forecastWeekdaySelect">${WEEKDAY_LABELS.map((d,i)=>`<option value="${i}">${d}曜日</option>`).join('')}</select></span>`;
-  }
-  const liveInput = document.getElementById('forecastTargetInput') || document.getElementById('forecastWeekdaySelect');
-  if(liveInput){
-    liveInput.addEventListener('change', renderForecastResult);
-    liveInput.addEventListener('keydown', e => { if(e.key === 'Enter') renderForecastResult(); });
-  }
-}
-
-function fmtForecastQty(n){
-  if(!Number.isFinite(n)) return '0';
-  const rounded = Math.round(n * 10) / 10;
-  return (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(1);
-}
-
-function computeForecast(){
-  const mode = forecastMode();
-  const dateKeys = Object.keys(DATA.salesHistory).sort();
-  if(!dateKeys.length){
-    return {ok:false, message:'まだCSVが取り込まれていません。①でデータを取り込んでください。'};
-  }
-  let refDateKeys = dateKeys;
-  let ratio = 1;
-  let baselineLabel = '';
-  if(mode === 'weekday'){
-    const sel = document.getElementById('forecastWeekdaySelect');
-    const dow = sel ? Number(sel.value) : 0;
-    refDateKeys = dateKeys.filter(dk => DATA.salesHistory[dk].dow === dow);
-    if(!refDateKeys.length){
-      return {ok:false, message: `${dowLabel(dow)}曜日の取り込み済みデータがありません。`};
-    }
-    baselineLabel = `${dowLabel(dow)}曜日の実績(${refDateKeys.length}日分の平均、倍率なしでそのまま表示)`;
-  } else {
-    const targetInput = document.getElementById('forecastTargetInput');
-    const target = targetInput ? parseFloat(targetInput.value.trim()) : NaN;
-    if(!target || target <= 0){
-      return {ok:false, message: mode==='sales' ? '目標売上予測(万円)を入力してください。' : '目標客数(人)を入力してください。'};
-    }
-    if(mode === 'sales'){
-      const avgManYen = dateKeys.reduce((s,dk)=>s+DATA.salesHistory[dk].totalSales,0) / dateKeys.length / 10000;
-      if(avgManYen <= 0) return {ok:false, message:'実績データの売上が0のため計算できません。'};
-      ratio = target / avgManYen;
-      baselineLabel = `実績平均売上 ${avgManYen.toFixed(1)}万円(${dateKeys.length}日分) → 目標 ${target}万円 (倍率 ×${ratio.toFixed(2)})`;
-    } else {
-      const avgCustomers = dateKeys.reduce((s,dk)=>s+DATA.salesHistory[dk].customerCount,0) / dateKeys.length;
-      if(avgCustomers <= 0) return {ok:false, message:'実績データの客数が0のため計算できません。'};
-      ratio = target / avgCustomers;
-      baselineLabel = `実績平均客数 ${avgCustomers.toFixed(1)}人(${dateKeys.length}日分) → 目標 ${target}人 (倍率 ×${ratio.toFixed(2)})`;
-    }
-  }
-
-  const menuAvg = {};
-  refDateKeys.forEach(dk => {
-    const day = DATA.salesHistory[dk];
-    Object.keys(day.items).forEach(name => {
-      menuAvg[name] = (menuAvg[name]||0) + day.items[name].qty;
-    });
-  });
-  Object.keys(menuAvg).forEach(name => { menuAvg[name] = menuAvg[name] / refDateKeys.length; });
-
-  const menuDeptMap = allSalesMenuNames();
-  const stTotals = {};
-  const unmapped = [];
-  Object.keys(menuAvg).forEach(name => {
-    const predictedQty = menuAvg[name] * ratio;
-    const recipe = DATA.recipes[name];
-    if(recipe && recipe.length){
-      recipe.forEach(m => { stTotals[m.no] = (stTotals[m.no]||0) + predictedQty * m.qty; });
-    } else if(predictedQty > 0){
-      // 除外した部門(既定でドリンク/のみ放題)は、そもそも仕込みチェックリスト
-      // と無関係なことが多いので「未設定」警告にも出さない — ②レシピ表の
-      // 表示設定と揃えることで、レシピ表で隠したメニューが計算結果側では
-      // 警告として復活してしまう食い違いを防ぐ。
-      const dept = menuDeptMap[name] ? menuDeptMap[name].dept : '';
-      if(isDeptIncluded(dept)) unmapped.push({name, qty:predictedQty});
-    }
-  });
-  unmapped.sort((a,b) => b.qty - a.qty);
-
-  const resultRows = Object.keys(stTotals).map(no => {
-    const item = DATA.master[no];
-    const qty = stTotals[no];
-    const packSize = item && item.packSize ? Number(item.packSize) : null;
-    // マスタで「1パックの数量」が入力されている品目だけ、必要パック数(切り上げ)
-    // もあわせて計算する — 例: 1パック50本入りで予測120本なら3パック。
-    const packCount = (packSize && packSize > 0) ? Math.ceil(qty / packSize) : null;
-    return {no:Number(no), name:item ? item.name : '(不明な品番)', unit:item ? (item.unit||'') : '', qty, packSize, packCount};
-  }).sort((a,b) => a.no - b.no);
-
-  return {ok:true, mode, ratio, baselineLabel, resultRows, unmapped: unmapped.slice(0,15), unmappedTotal: unmapped.length};
-}
-
-function renderForecastResult(){
-  const out = document.getElementById('forecastResult');
-  if(!out) return;
-  const res = computeForecast();
-  if(!res.ok){
-    out.innerHTML = `<p class="hint">${escapeHtml(res.message)}</p>`;
-    return;
-  }
-  let html = `<p class="hint">${escapeHtml(res.baselineLabel)}</p>`;
-  if(!res.resultRows.length){
-    html += '<p class="hint">レシピ表に登録済みのメニューの出数がありません。まず②レシピ表でST項目を対応づけてください。</p>';
-  } else {
-    html += `<table class="forecast-table"><thead><tr><th>No.</th><th>品名</th><th>単位</th><th>予想仕込み量</th><th>必要パック数</th></tr></thead><tbody>`
-      + res.resultRows.map(r => `<tr data-no="${r.no}" title="ダブルクリックでマスタ編集へ"><td>${r.no}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.unit)}</td><td class="forecast-qty">${fmtForecastQty(r.qty)}</td><td class="forecast-qty">${r.packCount !== null ? `${r.packCount}パック<span class="hint">(1パック${escapeHtml(fmtQty(r.packSize))})</span>` : '—'}</td></tr>`).join('')
-      + `</tbody></table>`;
-  }
-  if(res.unmapped.length){
-    html += `<p class="hint" style="margin-top:12px;">⚠ レシピ未設定のメニュー(出数の多い順、上位${res.unmapped.length}件${res.unmappedTotal > res.unmapped.length ? ' / 全'+res.unmappedTotal+'件' : ''}) — ②レシピ表でST項目を対応づけると、この計算結果に反映されます。</p>`
-      + `<div class="recipe-chips">` + res.unmapped.map(u => `<span class="recipe-chip" style="cursor:default;">${escapeHtml(u.name)}(平均${fmtForecastQty(u.qty)}/日)</span>`).join('') + `</div>`;
-  }
-  out.innerHTML = html;
-  out.querySelectorAll('table.forecast-table tbody tr[data-no]').forEach(tr => {
-    tr.addEventListener('dblclick', () => jumpToMasterItem(Number(tr.dataset.no)));
-  });
-}
-
-// ST項目のNo.から、それを使っているメニュー(と使用量)を逆引きする。
-// DATA.recipesはメニュー名→[{no,qty}]という向きなので、単純に全件なめて
-// 一致するNo.を集めるだけ(件数はメニュー数程度で軽い)。
-function renderReverseLookup(){
-  const out = document.getElementById('reverseLookupResult');
-  if(!out) return;
-  const input = document.getElementById('reverseLookupNoInput');
-  const noStr = input ? input.value.trim() : '';
-  if(!noStr){
-    out.innerHTML = '<p class="hint">No.を入力すると、対応するメニューの一覧が表示されます。</p>';
-    return;
-  }
-  const no = Number(noStr);
-  const item = DATA.master[String(no)];
-  if(!no || !item){
-    out.innerHTML = '<p class="hint">そのNo.はマスタに存在しません。</p>';
-    return;
-  }
-  const matches = [];
-  Object.keys(DATA.recipes).forEach(menu => {
-    (DATA.recipes[menu] || []).forEach(m => {
-      if(m.no === no) matches.push({menu, qty:m.qty});
-    });
-  });
-  matches.sort((a,b) => b.qty - a.qty);
-  if(!matches.length){
-    out.innerHTML = `<p class="hint">No.${no} ${escapeHtml(item.name)} を使っているメニューはまだ登録されていません。</p>`;
-    return;
-  }
-  out.innerHTML = `<p class="hint">No.${no} ${escapeHtml(item.name)} を使用しているメニュー(${matches.length}件):</p>`
-    + `<div class="recipe-chips">` + matches.map(m => `<span class="recipe-chip" style="cursor:default;">${escapeHtml(m.menu)} ×${escapeHtml(fmtQty(m.qty))}</span>`).join('') + `</div>`;
-}
-
-function renderForecastTab(){
-  renderSalesHistoryList();
-  renderRecipeList();
-  renderReverseLookup();
-  renderForecastResult();
 }
 
 // ---------- マスタ・レシピ表の保存/読み込み(日々の記録とは別の独立したファイル) ----------
@@ -2790,62 +2066,6 @@ document.getElementById('loadMasterRecipeFile').addEventListener('change', e => 
   reader.readAsText(file);
   e.target.value = '';
 });
-
-document.getElementById('importCsvBtn').addEventListener('click', () => {
-  const text = document.getElementById('salesCsvPaste').value;
-  const statusEl = document.getElementById('csvImportStatus');
-  if(!text || !text.trim()){
-    statusEl.textContent = '貼り付け欄が空です。';
-    return;
-  }
-  const res = importSalesCsv(text);
-  statusEl.textContent = res.message;
-  if(res.ok){
-    document.getElementById('salesCsvPaste').value = '';
-    renderForecastTab();
-  }
-});
-
-document.getElementById('salesCsvFile').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('csvImportStatus');
-  const reader = new FileReader();
-  reader.onload = () => {
-    const res = importSalesCsv(reader.result);
-    statusEl.textContent = res.message;
-    if(res.ok) renderForecastTab();
-  };
-  reader.onerror = () => { statusEl.textContent = 'ファイルの読み込みに失敗しました。貼り付け欄への直接貼り付けをお試しください。'; };
-  // Japanese POS exports are typically Shift_JIS-encoded; browsers decode
-  // this natively per the WHATWG Encoding Standard. The paste box above is
-  // the primary, most reliable path (clipboard text is already decoded by
-  // the OS) — this file picker is just a convenience alternative.
-  reader.readAsText(file, 'shift_jis');
-  e.target.value = '';
-});
-
-document.querySelectorAll('input[name="forecastMode"]').forEach(el => {
-  el.addEventListener('change', () => {
-    renderForecastInputArea();
-    renderForecastResult();
-  });
-});
-const recipeSearchInputEl = document.getElementById('recipeSearchInput');
-if(recipeSearchInputEl) recipeSearchInputEl.addEventListener('input', renderRecipeList);
-const recipeUnmappedOnlyChkEl = document.getElementById('recipeUnmappedOnlyChk');
-if(recipeUnmappedOnlyChkEl) recipeUnmappedOnlyChkEl.addEventListener('change', renderRecipeList);
-const recipeBulkMatchBtnEl = document.getElementById('recipeBulkMatchBtn');
-if(recipeBulkMatchBtnEl) recipeBulkMatchBtnEl.addEventListener('click', () => {
-  const applied = bulkApplyExactSuggestions();
-  setStatus(applied > 0 ? `${applied}件のメニューに完全一致の候補を自動で採用しました。内容を確認してください。` : '完全一致の候補が見つかりませんでした。');
-  renderRecipeList();
-  renderForecastResult();
-});
-const reverseLookupNoInputEl = document.getElementById('reverseLookupNoInput');
-if(reverseLookupNoInputEl) reverseLookupNoInputEl.addEventListener('input', renderReverseLookup);
-
-renderForecastInputArea();
 
 // init
 state = freshState();
@@ -3388,6 +2608,119 @@ function tryUnlock(){
     if(e.key === 'Enter') tryUnlock();
   });
   document.getElementById('lockPinInput').focus();
+})();
+</script>
+<script>
+// ---------- メニュー出数集計(外部ツールの統合) ----------
+// 元は独立したReact製の単体ツール(menutallystandalone_1.html)として作られていた
+// ものを、「予想仕込み」タブの後継としてこのアプリに統合した。内部の集計・
+// 分析ロジック(runApp関数の中身)は元のツールから変更していない。変更したのは
+// 主に2点:
+//   1. マウント先を document.getElementById("root")(ページ全体)から
+//      #menuTallyRoot(このタブ専用のコンテナ)に変更しただけ。
+//   2. 保存先(window.storage)を、独自のFirebase設定入力フォームを出す代わりに、
+//      このアプリが既に接続しているクラウド同期(Firestore)にそのまま乗せる
+//      ように差し替えた(クラウドに未接続・オフラインの場合はこの端末の
+//      localStorageに自動でフォールバックする)。
+(function(){
+  window.storage = {
+    async get(key){
+      if(cloudReady && cloudDocRef){
+        const doc = await cloudDocRef.collection('menuTallyKv').doc(String(key)).get();
+        if(!doc.exists) throw new Error('not found: ' + key);
+        return { key, value: doc.data().value };
+      }
+      const v = localStorage.getItem('menu-tally:' + key);
+      if(v === null) throw new Error('not found: ' + key);
+      return { key, value: v };
+    },
+    async set(key, value){
+      if(cloudReady && cloudDocRef){
+        await cloudDocRef.collection('menuTallyKv').doc(String(key)).set({
+          storeCode: CLOUD_STORE_CODE,
+          value: value,
+          updatedAt: new Date().toISOString()
+        });
+        return { key, value };
+      }
+      localStorage.setItem('menu-tally:' + key, value);
+      return { key, value };
+    },
+    async delete(key){
+      if(cloudReady && cloudDocRef){
+        await cloudDocRef.collection('menuTallyKv').doc(String(key)).delete();
+        return { key, deleted: true };
+      }
+      localStorage.removeItem('menu-tally:' + key);
+      return { key, deleted: true };
+    }
+  };
+
+  function loadOne(urls, i, cb){
+    if(i >= urls.length){ cb(new Error('読み込みに失敗しました: ' + urls[urls.length - 1])); return; }
+    const s = document.createElement('script');
+    s.src = urls[i];
+    s.crossOrigin = 'anonymous';
+    s.onload = function(){ cb(null); };
+    s.onerror = function(){ loadOne(urls, i + 1, cb); };
+    document.head.appendChild(s);
+  }
+  function loadAllScripts(list, i, cb){
+    if(i >= list.length){ cb(null); return; }
+    loadOne(list[i], 0, function(err){
+      if(err){ cb(err); return; }
+      loadAllScripts(list, i + 1, cb);
+    });
+  }
+  function showMenuTallyError(msg){
+    const el = document.getElementById('menuTallyRoot');
+    if(el) el.innerHTML = '<p class="hint" style="color:#a83232;">' + escapeHtml(msg) + '</p>';
+  }
+
+  loadAllScripts([
+    ['https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js', 'https://unpkg.com/react@18/umd/react.production.min.js'],
+    ['https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js', 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js'],
+    ['https://cdn.jsdelivr.net/npm/prop-types/prop-types.min.js', 'https://unpkg.com/prop-types/prop-types.min.js'],
+    ['https://cdn.jsdelivr.net/npm/react-is/umd/react-is.production.min.js', 'https://unpkg.com/react-is/umd/react-is.production.min.js'],
+    ['https://cdn.jsdelivr.net/npm/recharts/umd/Recharts.min.js', 'https://unpkg.com/recharts/umd/Recharts.min.js'],
+    ['https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js', 'https://unpkg.com/xlsx/dist/xlsx.full.min.js']
+  ], 0, function(err){
+    if(err){
+      showMenuTallyError('メニュー出数集計に必要なライブラリの読み込みに失敗しました(インターネット接続をご確認ください): ' + err.message);
+      return;
+    }
+    if(typeof React === 'undefined' || typeof ReactDOM === 'undefined' || typeof Recharts === 'undefined' || typeof XLSX === 'undefined'){
+      showMenuTallyError('必要なライブラリが正しく初期化されませんでした。再読み込みしてお試しください。');
+      return;
+    }
+    try{
+      runApp();
+    }catch(e){
+      showMenuTallyError('メニュー出数集計の起動に失敗しました: ' + e.message);
+    }
+  });
+
+  /* ここから下は「メニュー出数集計」ツール本体(内部ロジックは元ファイルから変更していません) */
+function runApp() {
+const{useState,useRef,useCallback,useMemo,useEffect}=React,{LineChart,Line,BarChart,Bar,Cell,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer}=Recharts;window.storage||(window.storage={async get(n){const a=localStorage.getItem("menu-tally:"+n);if(a===null)throw new Error("not found: "+n);return{key:n,value:a}},async set(n,a){return localStorage.setItem("menu-tally:"+n,a),{key:n,value:a}},async delete(n){return localStorage.removeItem("menu-tally:"+n),{key:n,deleted:!0}}});function IconBase({children:n,size:a=16,color:b="currentColor",style:C}){return React.createElement("span",{style:{fontSize:a,color:b,lineHeight:1,display:"inline-flex",...C}},n)}const Upload=n=>React.createElement(IconBase,{...n},"\u2B06"),FileSpreadsheet=n=>React.createElement(IconBase,{...n},"\u{1F4CA}"),Download=n=>React.createElement(IconBase,{...n},"\u2B07"),Printer=n=>React.createElement(IconBase,{...n},"\u{1F5A8}"),RotateCcw=n=>React.createElement(IconBase,{...n},"\u21BA"),AlertCircle=n=>React.createElement(IconBase,{...n},"\u26A0"),ChevronDown=n=>React.createElement(IconBase,{...n},"\u25BE"),ChevronUp=n=>React.createElement(IconBase,{...n},"\u25B4"),ACCENT="#2f6f62",INK="#1c2b2a",PAPER="#faf7f0",DEFAULT_COLUMN_NAMES={date:"\u55B6\u696D\u65E5",menu:"\u30E1\u30CB\u30E5\u30FC\u540D\u79F0",qty:"\u58F2\u4E0A\u6570\u91CF",dept:"\u90E8\u9580\u540D"};function guessColumn(n,a){const b=n.findIndex(C=>a.some(R=>String(C).includes(R)));return b>=0?b:0}function guessColumnOptional(n,a){return n.findIndex(b=>a.some(C=>String(b).includes(C)))}function toDateKey(n){if(n instanceof Date&&!isNaN(n)){const a=n.getFullYear(),b=String(n.getMonth()+1).padStart(2,"0"),C=String(n.getDate()).padStart(2,"0");return`${a}-${b}-${C}`}return String(n??"").trim()}function parseDelimitedText(n){const a=n.includes("	")?"	":",";return n.split(/\r\n|\r|\n/).filter(C=>C.trim()!=="").map(C=>{if(a==="	")return C.split("	");const R=[];let I="",f=!1;for(let B=0;B<C.length;B++){const $=C[B];if($==='"'){f=!f;continue}if($===","&&!f){R.push(I),I="";continue}I+=$}return R.push(I),R})}function parseFlexibleDate(n){if(!n)return null;let a=n.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(a)return new Date(+a[1],+a[2]-1,+a[3]);if(a=n.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/),a)return new Date(+a[1],+a[2]-1,+a[3]);if(a=n.match(/^(\d{4})(\d{2})(\d{2})$/),a)return new Date(+a[1],+a[2]-1,+a[3]);const b=new Date(n);return isNaN(b)?null:b}function weekdayLabel(n){const a=parseFlexibleDate(n);return a?["\u65E5","\u6708","\u706B","\u6C34","\u6728","\u91D1","\u571F"][a.getDay()]:""}function buildMapping(n){const a=$=>n.findIndex(G=>G===$),b=a(DEFAULT_COLUMN_NAMES.date)>=0?a(DEFAULT_COLUMN_NAMES.date):guessColumn(n,["\u65E5\u4ED8","date","\u65E5\u6642","\u55B6\u696D\u65E5"]),C=a(DEFAULT_COLUMN_NAMES.menu)>=0?a(DEFAULT_COLUMN_NAMES.menu):guessColumn(n,["\u30E1\u30CB\u30E5\u30FC","\u54C1\u540D","\u5546\u54C1","menu"]),R=a(DEFAULT_COLUMN_NAMES.qty)>=0?a(DEFAULT_COLUMN_NAMES.qty):guessColumn(n,["\u6570\u91CF","\u500B\u6570","\u51FA\u6570","qty","count"]),I=a(DEFAULT_COLUMN_NAMES.dept)>=0?a(DEFAULT_COLUMN_NAMES.dept):guessColumnOptional(n,["\u90E8\u9580","\u5E97\u8217","department","dept","\u30AB\u30C6\u30B4\u30EA"]),f=guessColumnOptional(n,["\u5358\u4FA1","\u91D1\u984D","\u4FA1\u683C","price","\u5024\u6BB5"]),B=a(DEFAULT_COLUMN_NAMES.date)>=0&&a(DEFAULT_COLUMN_NAMES.menu)>=0&&a(DEFAULT_COLUMN_NAMES.qty)>=0&&a(DEFAULT_COLUMN_NAMES.dept)>=0;return{mapping:{date:b,menu:C,qty:R,dept:I,price:f},isExactDefaultSet:B}}function MenuTallyApp(){const[n,a]=useState("upload"),[b,C]=useState([]),[R,I]=useState([]),[f,B]=useState({date:0,menu:0,qty:0,dept:-1,price:-1}),[$,G]=useState("\u304A\u901A\u3057"),[Z,me]=useState("\u304A\u5B50\u69D8\u98F2\u653E"),[U,_]=useState(()=>new Set),[J,O]=useState(()=>new Set),[de,H]=useState(""),[L,F]=useState(""),[N,W]=useState(()=>new Set),[Ae,he]=useState(!1),[$e,be]=useState(!1),[E,Y]=useState({col:null,dir:"asc"}),[K,q]=useState("table"),[ve,X]=useState(""),[we,ce]=useState(!1),[xe,ee]=useState(""),[te,Se]=useState(""),[oe,ke]=useState("file"),[ne,Fe]=useState(!1),[ue,ae]=useState([]),[We,Ce]=useState(!1),[re,ze]=useState(""),[Re,se]=useState(""),pe=useRef(null),Ne=useCallback(async()=>{try{const e=await window.storage.get("snapshot_index"),t=e?JSON.parse(e.value):[];ae(Array.isArray(t)?t:[])}catch{ae([])}},[]);useEffect(()=>{Ne()},[Ne]);const Ee=e=>{if(X(""),e.length<2){X("\u30C7\u30FC\u30BF\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30D8\u30C3\u30C0\u30FC\u884C\u3068\u30C7\u30FC\u30BF\u884C\u304C\u5FC5\u8981\u3067\u3059\u3002");return}const t=e[0].map(l=>String(l)),o=e.slice(1).filter(l=>l.some(u=>u!==""));C(t),I(o),ee("\u8CBC\u308A\u4ED8\u3051\u305F\u30C7\u30FC\u30BF");const{mapping:r,isExactDefaultSet:d}=buildMapping(t);B(r),d?(_(new Set),O(new Set),H(""),F(""),W(new Set),Y({col:null,dir:"asc"}),q("table"),a("result")):a("map")},De=useCallback(e=>{if(X(""),!e)return;ee(e.name);const t=/\.csv$/i.test(e.name),o=new FileReader;o.onload=r=>{try{let d;if(t){const v=r.target.result;let z;try{z=new TextDecoder("utf-8",{fatal:!0}).decode(v)}catch{z=new TextDecoder("shift-jis").decode(v)}z=z.replace(/^\uFEFF/,""),d=XLSX.read(z,{type:"string",cellDates:!0,raw:!1})}else d=XLSX.read(r.target.result,{type:"array",cellDates:!0});const l=d.Sheets[d.SheetNames[0]],u=XLSX.utils.sheet_to_json(l,{header:1,defval:""});if(u.length<2){X("\u30C7\u30FC\u30BF\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30D8\u30C3\u30C0\u30FC\u884C\u3068\u30C7\u30FC\u30BF\u884C\u304C\u5FC5\u8981\u3067\u3059\u3002");return}const h=u[0].map(v=>String(v)),x=u.slice(1).filter(v=>v.some(z=>z!==""));C(h),I(x);const{mapping:m,isExactDefaultSet:g}=buildMapping(h);B(m),g?(_(new Set),O(new Set),H(""),F(""),W(new Set),Y({col:null,dir:"asc"}),q("table"),a("result")):a("map")}catch{X("\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002Excel(.xlsx / .xls)\u307E\u305F\u306FCSV\u30D5\u30A1\u30A4\u30EB\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002")}},o.readAsArrayBuffer(e)},[]),Oe=(e,t)=>{const{date:o,menu:r,qty:d,dept:l}=t,u=l!==-1&&l!==void 0,h=new Map,x=new Map,m=new Set,g=new Map;for(const S of e){const k=String(S[r]??"").trim();if(!k)continue;const y=u?String(S[l]??"").trim():"",p=u?`${y}\uFF5C${k}`:k,M=toDateKey(S[o]),s=Number(S[d])||0;m.add(M),g.has(p)||g.set(p,new Map);const c=g.get(p);c.set(M,(c.get(M)||0)+s),h.set(p,(h.get(p)||0)+s),x.set(p,{dept:y,menu:k})}const v=Array.from(m).sort(),z=Array.from(h.keys()).sort((S,k)=>{if(u){const y=x.get(S).dept,p=x.get(k).dept;if(y!==p)return y.localeCompare(p,"ja")}return h.get(k)-h.get(S)}),T=v.map(S=>z.reduce((k,y)=>k+(g.get(y).get(S)||0),0)),D=Array.from(h.values()).reduce((S,k)=>S+k,0);return{rowKeys:z,rowInfo:x,useDept:u,dates:v,matrix:g,rowTotals:h,colTotals:T,grandTotal:D}},Ke=()=>{_(new Set),O(new Set),H(""),F(""),W(new Set),Y({col:null,dir:"asc"}),q("table"),a("result")},ie=useMemo(()=>f.dept===-1?[]:Array.from(new Set(R.map(e=>String(e[f.dept]??"").trim()).filter(Boolean))).sort((e,t)=>e.localeCompare(t,"ja")),[R,f.dept]),j=useMemo(()=>Array.from(new Set(R.map(e=>String(e[f.menu]??"").trim()).filter(Boolean))).sort((e,t)=>e.localeCompare(t,"ja")),[R,f.menu]),Be=useMemo(()=>{const e=L.trim().toLowerCase(),t=f.dept!==-1?[...j,...ie]:j,o=Array.from(new Set(t)).filter(r=>!N.has(r));return e?o.filter(r=>r.toLowerCase().includes(e)).slice(0,8):o.slice(0,8)},[L,j,ie,f.dept,N]),Te=useCallback((e,t)=>{const o=L.trim().toLowerCase();if(N.size===0&&!o)return!0;const r=N.has(e)||t&&N.has(t),d=o?e.toLowerCase().includes(o)||t&&t.toLowerCase().includes(o):!1;return r||d},[N,L]),Le=useMemo(()=>{const e=L.trim().toLowerCase(),t=j.filter(o=>!N.has(o));return e?t.filter(o=>o.toLowerCase().includes(e)).slice(0,8):t.slice(0,8)},[L,j,N]),fe=useCallback(e=>{const t=L.trim().toLowerCase();if(N.size===0&&!t)return!0;const o=N.has(e),r=t?e.toLowerCase().includes(t):!1;return o||r},[N,L]),ge=N.size>0||!!L.trim(),Q=useMemo(()=>!R.length||U.size===0&&J.size===0?R:R.filter(e=>{if(U.size&&f.dept!==-1){const t=String(e[f.dept]??"").trim();if(U.has(t))return!1}if(J.size){const t=String(e[f.menu]??"").trim();if(J.has(t))return!1}return!0}),[R,f,U,J]),i=useMemo(()=>Q.length?Oe(Q,f):null,[Q,f]),le=e=>{Y(t=>t.col===e?{col:e,dir:t.dir==="asc"?"desc":"asc"}:{col:e,dir:e==="menu"||e==="dept"?"asc":"desc"})},ye=useMemo(()=>{if(!i)return[];const{rowKeys:e,rowInfo:t,rowTotals:o,matrix:r}=i;if(!E.col)return e;const d=u=>E.col==="menu"?t.get(u).menu:E.col==="dept"?t.get(u).dept:E.col==="total"?o.get(u):r.get(u).get(E.col)||0,l=[...e];return l.sort((u,h)=>{const x=d(u),m=d(h);let g;return typeof x=="number"&&typeof m=="number"?g=x-m:g=String(x).localeCompare(String(m),"ja"),E.dir==="asc"?g:-g}),l},[i,E]),qe=useMemo(()=>i?N.size===0&&!L.trim()?ye:ye.filter(e=>{const t=i.rowInfo.get(e);return Te(t.menu,t.dept)}):[],[i,ye,L,N,Te]),A=useMemo(()=>{if(!i)return null;const{dates:e,colTotals:t,rowInfo:o,rowTotals:r,grandTotal:d}=i,l=e.map((s,c)=>({date:s,label:s.length>5?s.slice(5):s,weekday:weekdayLabel(s),total:t[c]})),u=l.length?l.reduce((s,c)=>s+c.total,0)/l.length:0,h=l.length?Math.sqrt(l.reduce((s,c)=>s+(c.total-u)**2,0)/l.length):0,x=l.map(s=>({...s,isAnomaly:h>0&&Math.abs(s.total-u)>1.5*h})),m=["\u6708","\u706B","\u6C34","\u6728","\u91D1","\u571F","\u65E5"],g=new Map(m.map(s=>[s,{sum:0,count:0}]));for(const s of x){if(!s.weekday)continue;const c=g.get(s.weekday);c&&(c.sum+=s.total,c.count+=1)}const v=m.map(s=>{const c=g.get(s);return{weekday:s,average:c.count?Math.round(c.sum/c.count*10)/10:0,sum:c.sum,count:c.count}}),z=v.slice(0,5).reduce((s,c)=>s+c.sum,0),T=v.slice(0,5).reduce((s,c)=>s+c.count,0),D=v.slice(5).reduce((s,c)=>s+c.sum,0),S=v.slice(5).reduce((s,c)=>s+c.count,0),k=T?z/T:0,y=S?D/S:0,p=new Map;for(const s of i.rowKeys){const{menu:c}=o.get(s);p.set(c,(p.get(c)||0)+r.get(s))}const M=Array.from(p.entries()).map(([s,c])=>({menu:s,total:c,pct:d?c/d*100:0})).sort((s,c)=>c.total-s.total);return{dailyTrend:x,weekdayChart:v,weekdayAvg:k,weekendAvg:y,menuRanking:M}},[i]),w=useMemo(()=>{if(!i||f.price===-1||f.price===void 0)return null;const{date:e,menu:t,qty:o,price:r}=f,d=new Set($.split(",").map(y=>y.trim()).filter(Boolean)),l=new Set(Z.split(",").map(y=>y.trim()).filter(Boolean)),u=new Map,h=new Map,x=new Map;let m=0,g=0;for(const y of Q){const p=String(y[t]??"").trim();if(!p)continue;const M=toDateKey(y[e]),s=Number(y[o])||0,c=Number(y[r])||0,Ie=s*c;u.set(M,(u.get(M)||0)+Ie),x.set(p,(x.get(p)||0)+Ie),d.has(p)&&(m+=s),l.has(p)&&(g+=s),(d.has(p)||l.has(p))&&h.set(M,(h.get(M)||0)+s)}const z=Array.from(new Set([...u.keys(),...h.keys()])).sort().map(y=>{const p=u.get(y)||0,M=h.get(y)||0;return{date:y,weekday:weekdayLabel(y),revenue:p,customers:M,avgSpend:M?p/M:0}}),T=z.reduce((y,p)=>y+p.revenue,0),D=z.reduce((y,p)=>y+p.customers,0),S=Array.from(x.entries()).map(([y,p])=>({menu:y,total:p,pct:T?p/T*100:0})).sort((y,p)=>p.total-y.total),k=[{label:"\u304A\u901A\u3057",value:m,pct:D?m/D*100:0},{label:"\u304A\u5B50\u69D8\u98F2\u307F\u653E\u984C",value:g,pct:D?g/D*100:0}];return{daily:z,totalRevenue:T,totalCustomers:D,avgSpend:D?T/D:0,menuRevenueRanking:S,customerBreakdown:k}},[i,Q,f,$,Z]),V=useMemo(()=>{const e=new Map;if(w)for(const t of w.daily)e.set(t.date,t);return e},[w]),Xe=async()=>{const e=re.trim();if(e){se("\u4FDD\u5B58\u4E2D...");try{const t=String(Date.now()),o={headers:b,rows:R,mapping:f,otoshiNames:$,kidsNames:Z,fileName:xe};await window.storage.set(`snapshot:${t}`,JSON.stringify(o));let r=[];try{const d=await window.storage.get("snapshot_index");r=d?JSON.parse(d.value):[]}catch{r=[]}r=[{id:t,name:e,savedAt:new Date().toISOString()},...r],await window.storage.set("snapshot_index",JSON.stringify(r)),ae(r),ze(""),Ce(!1),se("\u4FDD\u5B58\u3057\u307E\u3057\u305F"),setTimeout(()=>se(""),2e3)}catch{se("\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F")}}},je=async e=>{X("");try{const t=await window.storage.get(`snapshot:${e}`),o=JSON.parse(t.value);C(o.headers),I(o.rows),B(o.mapping),G(o.otoshiNames||"\u304A\u901A\u3057"),me(o.kidsNames||"\u304A\u5B50\u69D8\u98F2\u653E"),ee(o.fileName||"\u4FDD\u5B58\u30C7\u30FC\u30BF"),_(new Set),O(new Set),H(""),F(""),W(new Set),Y({col:null,dir:"asc"}),q("table"),a("result")}catch{X("\u4FDD\u5B58\u30C7\u30FC\u30BF\u306E\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002")}},_e=async e=>{try{await window.storage.delete(`snapshot:${e}`);const t=ue.filter(o=>o.id!==e);await window.storage.set("snapshot_index",JSON.stringify(t)),ae(t)}catch{}},He=useMemo(()=>{if(!i||!de)return null;const{dates:e,rowKeys:t,rowInfo:o,matrix:r}=i,d=t.filter(l=>o.get(l).menu===de);return e.map(l=>{let u=0;for(const h of d)u+=r.get(h).get(l)||0;return{date:l,label:l.length>5?l.slice(5):l,weekday:weekdayLabel(l),total:u}})},[i,de]),P=useMemo(()=>{if(!i||i.dates.length<2)return null;const e=i.dates,t=Math.ceil(e.length/2),o=e.slice(0,t),r=e.slice(t),d=new Map(e.map((m,g)=>[m,i.colTotals[g]])),l=m=>m.reduce((g,v)=>g+(d.get(v)||0),0),u=m=>m.reduce((g,v)=>g+(V.get(v)?.revenue||0),0),h=m=>m.reduce((g,v)=>g+(V.get(v)?.customers||0),0),x=[];return x.push({label:"\u51FA\u6570",first:l(o),second:l(r),fmt:"num"}),w&&(x.push({label:"\u58F2\u4E0A",first:u(o),second:u(r),fmt:"yen"}),x.push({label:"\u5BA2\u6570",first:h(o),second:h(r),fmt:"num"})),{firstRange:`${o[0]} \u301C ${o[o.length-1]}`,secondRange:`${r[0]} \u301C ${r[r.length-1]}`,firstDays:o.length,secondDays:r.length,rows:x}},[i,V,w]),Me=()=>{a("upload"),C([]),I([]),X(""),ee(""),Se(""),_(new Set),O(new Set),H(""),F(""),W(new Set),pe.current&&(pe.current.value="")},Pe=()=>{if(!i)return;const{rowKeys:e,rowInfo:t,useDept:o,dates:r,matrix:d,rowTotals:l,colTotals:u,grandTotal:h}=i,m=[o?["\u90E8\u9580","\u30E1\u30CB\u30E5\u30FC",...r,"\u5408\u8A08"]:["\u30E1\u30CB\u30E5\u30FC",...r,"\u5408\u8A08"]];for(const z of e){const T=t.get(z),D=o?[T.dept,T.menu]:[T.menu];m.push([...D,...r.map(S=>d.get(z).get(S)||0),l.get(z)])}m.push(["\u5408\u8A08",...o?[""]:[],...u,h]);const g=XLSX.utils.aoa_to_sheet(m),v=XLSX.utils.book_new();XLSX.utils.book_append_sheet(v,g,"\u51FA\u6570\u96C6\u8A08"),XLSX.writeFile(v,"\u30E1\u30CB\u30E5\u30FC\u51FA\u6570\u96C6\u8A08.xlsx")},Ue=()=>{if(!i)return;const{rowKeys:e,rowInfo:t,useDept:o,dates:r,matrix:d,rowTotals:l,colTotals:u,grandTotal:h}=i,x=o?["\u90E8\u9580","\u30E1\u30CB\u30E5\u30FC",...r,"\u5408\u8A08"]:["\u30E1\u30CB\u30E5\u30FC",...r,"\u5408\u8A08"],m=S=>{const k=String(S??"");return/[",\n]/.test(k)?`"${k.replace(/"/g,'""')}"`:k},g=[x.map(m).join(",")];for(const S of e){const k=t.get(S),y=o?[k.dept,k.menu]:[k.menu];g.push([...y,...r.map(p=>d.get(S).get(p)||0),l.get(S)].map(m).join(","))}g.push([...o?["\u5408\u8A08",""]:["\u5408\u8A08"],...u,h].map(m).join(","));const v="\uFEFF"+g.join(`\r
+`),z=new Blob([v],{type:"text/csv;charset=utf-8;"}),T=URL.createObjectURL(z),D=document.createElement("a");D.href=T,D.download="\u30E1\u30CB\u30E5\u30FC\u51FA\u6570\u96C6\u8A08.csv",D.click(),URL.revokeObjectURL(T)},Je=()=>{window.print()};return React.createElement("div",{style:{minHeight:"100vh",background:PAPER,fontFamily:"'Noto Sans JP', sans-serif",color:INK}},React.createElement("style",null,`
+        @media print {
+          .no-print { display: none !important; }
+          .print-area { box-shadow: none !important; }
+          body { background: white !important; }
+        }
+        .stamp {
+          width: 56px; height: 56px; border-radius: 50%;
+          border: 3px solid ${ACCENT}; color: ${ACCENT};
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 700; font-size: 20px; letter-spacing: 1px;
+          transform: rotate(-8deg); flex-shrink: 0;
+        }
+        .num { font-family: 'Roboto Mono', monospace; }
+      `),React.createElement("div",{style:{maxWidth:880,margin:"0 auto",padding:"40px 20px"}},React.createElement("header",{style:{display:"flex",alignItems:"center",gap:16,marginBottom:32}},React.createElement("div",{className:"stamp"},"\u8A08"),React.createElement("div",null,React.createElement("div",{style:{fontSize:12,letterSpacing:2,color:ACCENT,fontWeight:600}},"MENU TALLY SHEET"),React.createElement("h1",{style:{fontSize:26,fontWeight:700,margin:"2px 0 0"}},"\u30E1\u30CB\u30E5\u30FC\u51FA\u6570\u96C6\u8A08"))),n==="upload"&&ue.length>0&&React.createElement("div",{style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:14,marginBottom:16}},React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#8a8378",marginBottom:8}},"\u4FDD\u5B58\u6E08\u307F\u30C7\u30FC\u30BF"),ue.map(e=>React.createElement("div",{key:e.id,style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"6px 0",borderBottom:"1px solid #f0ede4"}},React.createElement("div",{style:{fontSize:13}},e.name,React.createElement("span",{style:{fontSize:11,color:"#a8a297",marginLeft:8}},new Date(e.savedAt).toLocaleDateString("ja-JP"))),React.createElement("div",{style:{display:"flex",gap:6}},React.createElement("button",{onClick:()=>je(e.id),style:{...tabStyle(!1),padding:"4px 10px",fontSize:12}},"\u958B\u304F"),React.createElement("button",{onClick:()=>_e(e.id),style:{...tabStyle(!1),padding:"4px 10px",fontSize:12,color:"#a83232",borderColor:"#e5c5c5"}},"\u524A\u9664"))))),n==="upload"&&React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},React.createElement("button",{onClick:()=>ke("file"),style:tabStyle(oe==="file")},"\u30D5\u30A1\u30A4\u30EB\u3092\u9078\u629E"),React.createElement("button",{onClick:()=>ke("paste"),style:tabStyle(oe==="paste")},"\u30C7\u30FC\u30BF\u3092\u8CBC\u308A\u4ED8\u3051")),n==="upload"&&oe==="file"&&React.createElement("label",{htmlFor:"menu-tally-file-input",onDragOver:e=>{e.preventDefault(),ce(!0)},onDragLeave:()=>ce(!1),onDrop:e=>{e.preventDefault(),ce(!1),De(e.dataTransfer.files?.[0])},style:{position:"relative",display:"block",border:`2px dashed ${we?ACCENT:"#c8c2b4"}`,borderRadius:4,background:we?"#eef4f1":"white",padding:"60px 20px",textAlign:"center",cursor:"pointer",transition:"all 0.15s"}},React.createElement("input",{id:"menu-tally-file-input",ref:pe,type:"file",accept:".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv",style:{position:"absolute",top:0,left:0,right:0,bottom:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",margin:0,fontSize:16},onChange:e=>De(e.target.files?.[0])}),React.createElement(Upload,{size:32,color:ACCENT,style:{marginBottom:12}}),React.createElement("div",{style:{fontWeight:600,marginBottom:4}},"Excel/CSV\u30D5\u30A1\u30A4\u30EB\u3092\u30C9\u30E9\u30C3\u30B0&\u30C9\u30ED\u30C3\u30D7"),React.createElement("div",{style:{fontSize:13,color:"#8a8378"}},"\u307E\u305F\u306F\u30BF\u30C3\u30D7\u3057\u3066\u9078\u629E(.xlsx / .xls / .csv)"),React.createElement("div",{style:{fontSize:12,color:"#a8a297",marginTop:16}},"\u5217: \u65E5\u4ED8\u30FB\u30E1\u30CB\u30E5\u30FC\u540D\u30FB\u6570\u91CF \u3092\u542B\u3080\u30D5\u30A1\u30A4\u30EB\u306B\u5BFE\u5FDC")),n==="upload"&&oe==="paste"&&React.createElement("div",{style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:20}},React.createElement("div",{style:{fontSize:13,color:"#8a8378",marginBottom:10}},"Excel/\u30B9\u30D7\u30EC\u30C3\u30C9\u30B7\u30FC\u30C8\u3067\u7BC4\u56F2\u3092\u30B3\u30D4\u30FC\u3057\u3066\u3001\u30D8\u30C3\u30C0\u30FC\u884C\u3092\u542B\u3081\u3066\u4E0B\u306B\u8CBC\u308A\u4ED8\u3051\u3066\u304F\u3060\u3055\u3044(1\u884C\u76EE:\u65E5\u4ED8\u30FB\u30E1\u30CB\u30E5\u30FC\u540D\u30FB\u6570\u91CF\u306A\u3069)\u3002"),React.createElement("textarea",{value:te,onChange:e=>Se(e.target.value),placeholder:`\u65E5\u4ED8	\u30E1\u30CB\u30E5\u30FC\u540D	\u6570\u91CF
+2024-06-01	\u91A4\u6CB9\u30E9\u30FC\u30E1\u30F3	12`,rows:8,style:{width:"100%",boxSizing:"border-box",border:"1px solid #d8d2c5",borderRadius:4,padding:10,fontSize:13,fontFamily:"'Roboto Mono', monospace",resize:"vertical"}}),React.createElement("button",{onClick:()=>Ee(parseDelimitedText(te)),disabled:!te.trim(),style:{...btnStyle(ACCENT,"white"),marginTop:12,opacity:te.trim()?1:.5}},"\u3053\u306E\u30C7\u30FC\u30BF\u3092\u4F7F\u3046")),ve&&React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",background:"#fdecea",color:"#a83232",padding:"12px 16px",borderRadius:4,marginTop:16,fontSize:14}},React.createElement(AlertCircle,{size:18})," ",ve),n==="map"&&React.createElement("div",{style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:24,marginTop:8}},React.createElement("div",{style:{fontSize:13,color:"#8a8378",marginBottom:16}},"\u300C",xe,"\u300D\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002\u5217\u306E\u5BFE\u5FDC\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002"),[{key:"date",label:"\u65E5\u4ED8\u306E\u5217"},{key:"menu",label:"\u30E1\u30CB\u30E5\u30FC\u540D\u306E\u5217"},{key:"qty",label:"\u6570\u91CF\u306E\u5217"}].map(({key:e,label:t})=>React.createElement("div",{key:e,style:{display:"flex",alignItems:"center",gap:12,marginBottom:12}},React.createElement("label",{style:{width:120,fontSize:14,fontWeight:600}},t),React.createElement("select",{value:f[e],onChange:o=>B({...f,[e]:Number(o.target.value)}),style:{flex:1,padding:"8px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:14,background:PAPER}},b.map((o,r)=>React.createElement("option",{key:r,value:r},o||`(\u5217${r+1})`))))),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:12}},React.createElement("label",{style:{width:120,fontSize:14,fontWeight:600}},"\u90E8\u9580\u306E\u5217(\u4EFB\u610F)"),React.createElement("select",{value:f.dept,onChange:e=>B({...f,dept:Number(e.target.value)}),style:{flex:1,padding:"8px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:14,background:PAPER}},React.createElement("option",{value:-1},"\u4F7F\u7528\u3057\u306A\u3044"),b.map((e,t)=>React.createElement("option",{key:t,value:t},e||`(\u5217${t+1})`)))),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:12}},React.createElement("label",{style:{width:120,fontSize:14,fontWeight:600}},"\u5358\u4FA1\u306E\u5217(\u4EFB\u610F)"),React.createElement("select",{value:f.price,onChange:e=>B({...f,price:Number(e.target.value)}),style:{flex:1,padding:"8px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:14,background:PAPER}},React.createElement("option",{value:-1},"\u4F7F\u7528\u3057\u306A\u3044(\u58F2\u4E0A\u30FB\u5BA2\u6570\u306F\u8A08\u7B97\u3057\u306A\u3044)"),b.map((e,t)=>React.createElement("option",{key:t,value:t},e||`(\u5217${t+1})`)))),f.price!==-1&&React.createElement("div",{style:{background:PAPER,border:"1px solid #e5e0d5",borderRadius:4,padding:14,marginBottom:12}},React.createElement("div",{style:{fontSize:12,color:"#8a8378",marginBottom:10}},"\u5BA2\u6570 = \u304A\u901A\u3057\u306E\u6570\u91CF + \u304A\u5B50\u69D8\u98F2\u307F\u653E\u984C\u306E\u6570\u91CF \u3068\u3057\u3066\u7B97\u51FA\u3057\u307E\u3059\u3002\u30E1\u30CB\u30E5\u30FC\u540D\u306E\u5217\u3067\u305D\u308C\u3089\u304C\u8A72\u5F53\u3059\u308B\u8868\u8A18\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044(\u8868\u8A18\u3086\u308C\u304C\u3042\u308C\u3070\u30AB\u30F3\u30DE\u533A\u5207\u308A\u3067\u8907\u6570\u6307\u5B9A\u53EF)\u3002"),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:8}},React.createElement("label",{style:{width:140,fontSize:13,fontWeight:600}},"\u304A\u901A\u3057\u306E\u9805\u76EE\u540D"),React.createElement("input",{type:"text",value:$,onChange:e=>G(e.target.value),style:{flex:1,padding:"7px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:13,background:"white"}})),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},React.createElement("label",{style:{width:140,fontSize:13,fontWeight:600}},"\u304A\u5B50\u69D8\u98F2\u307F\u653E\u984C\u306E\u9805\u76EE\u540D"),React.createElement("input",{type:"text",value:Z,onChange:e=>me(e.target.value),style:{flex:1,padding:"7px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:13,background:"white"}}))),React.createElement("div",{style:{display:"flex",gap:10,marginTop:20}},React.createElement("button",{onClick:Ke,style:{background:ACCENT,color:"white",border:"none",padding:"10px 20px",borderRadius:4,fontWeight:600,cursor:"pointer",fontSize:14}},"\u96C6\u8A08\u3059\u308B"),React.createElement("button",{onClick:Me,style:{background:"transparent",color:"#8a8378",border:"1px solid #d8d2c5",padding:"10px 16px",borderRadius:4,cursor:"pointer",fontSize:14}},"\u3084\u308A\u76F4\u3059"))),n==="result"&&i&&React.createElement(React.Fragment,null,React.createElement("div",{className:"no-print",style:{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}},React.createElement("button",{onClick:Pe,style:btnStyle(ACCENT,"white")},React.createElement(FileSpreadsheet,{size:16})," Excel\u306B\u66F8\u304D\u51FA\u3059"),React.createElement("button",{onClick:Ue,style:btnStyle("white",INK,"1px solid #d8d2c5")},React.createElement(Download,{size:16})," CSV\u306B\u66F8\u304D\u51FA\u3059"),React.createElement("button",{onClick:Je,style:btnStyle("white",INK,"1px solid #d8d2c5")},React.createElement(Printer,{size:16})," PDF\u306B\u66F8\u304D\u51FA\u3059"),React.createElement("button",{onClick:()=>a("map"),style:btnStyle("white","#8a8378","1px solid #d8d2c5")},"\u5217\u3092\u78BA\u8A8D\u30FB\u5909\u66F4\u3059\u308B"),React.createElement("button",{onClick:()=>Fe(e=>!e),style:btnStyle(ne?"#eef4f1":"white",ne?ACCENT:"#8a8378",`1px solid ${ne?ACCENT:"#d8d2c5"}`)},"\u30D5\u30A3\u30EB\u30BF\u30FC"),React.createElement("button",{onClick:()=>Ce(e=>!e),style:btnStyle("white","#8a8378","1px solid #d8d2c5")},"\u3053\u306E\u7D50\u679C\u3092\u4FDD\u5B58"),React.createElement("button",{onClick:Me,style:btnStyle("white","#8a8378","1px solid #d8d2c5")},React.createElement(RotateCcw,{size:16})," \u5225\u306E\u30D5\u30A1\u30A4\u30EB\u3092\u8AAD\u307F\u8FBC\u3080")),We&&React.createElement("div",{className:"no-print",style:{display:"flex",alignItems:"center",gap:8,marginBottom:16,background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:12}},React.createElement("input",{type:"text",value:re,onChange:e=>ze(e.target.value),placeholder:"\u4F8B: 2026\u5E747\u6708",style:{flex:1,padding:"7px 10px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:13}}),React.createElement("button",{onClick:Xe,disabled:!re.trim(),style:{...btnStyle(ACCENT,"white"),opacity:re.trim()?1:.5}},"\u4FDD\u5B58"),Re&&React.createElement("span",{style:{fontSize:12,color:"#8a8378"}},Re)),ne&&React.createElement("div",{className:"no-print",style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:14,marginBottom:16}},i.useDept&&ie.length>0&&React.createElement("div",{style:{marginBottom:12}},React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#8a8378",marginBottom:6}},"\u90E8\u9580\u3067\u7D5E\u308A\u8FBC\u307F"),React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:10}},ie.map(e=>React.createElement("label",{key:e,style:{display:"flex",alignItems:"center",gap:4,fontSize:13,cursor:"pointer"}},React.createElement("input",{type:"checkbox",checked:!U.has(e),onChange:()=>{_(t=>{const o=new Set(t);return o.has(e)?o.delete(e):o.add(e),o})}}),e)))),React.createElement("div",null,React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}},React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#8a8378"}},"\u30E1\u30CB\u30E5\u30FC\u3067\u7D5E\u308A\u8FBC\u307F"),React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:()=>O(new Set),style:{fontSize:11,color:ACCENT,background:"none",border:"none",cursor:"pointer"}},"\u5168\u9078\u629E"),React.createElement("button",{onClick:()=>O(new Set(j)),style:{fontSize:11,color:"#a83232",background:"none",border:"none",cursor:"pointer"}},"\u5168\u89E3\u9664"))),React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:10,maxHeight:180,overflowY:"auto"}},j.map(e=>React.createElement("label",{key:e,style:{display:"flex",alignItems:"center",gap:4,fontSize:13,cursor:"pointer"}},React.createElement("input",{type:"checkbox",checked:!J.has(e),onChange:()=>{O(t=>{const o=new Set(t);return o.has(e)?o.delete(e):o.add(e),o})}}),e))))),React.createElement("div",{className:"no-print",style:{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}},React.createElement("button",{onClick:()=>q("table"),style:tabStyle(K==="table")},"\u8868"),React.createElement("button",{onClick:()=>q("analysis"),style:tabStyle(K==="analysis")},"\u5206\u6790"),w&&React.createElement("button",{onClick:()=>q("sales"),style:tabStyle(K==="sales")},"\u58F2\u4E0A\u30FB\u5BA2\u6570"),React.createElement("button",{onClick:()=>q("compare"),style:tabStyle(K==="compare")},"\u671F\u9593\u6BD4\u8F03")),K==="table"&&React.createElement(React.Fragment,null,React.createElement("div",{className:"no-print",style:{position:"relative",marginBottom:12}},React.createElement("input",{type:"text",value:L,onChange:e=>F(e.target.value),onFocus:()=>he(!0),onBlur:()=>setTimeout(()=>he(!1),120),placeholder:"\u30E1\u30CB\u30E5\u30FC\u540D\u30FB\u90E8\u9580\u540D\u3067\u691C\u7D22\u30FB\u8907\u6570\u9078\u629E\u3067\u304D\u307E\u3059",style:{width:"100%",boxSizing:"border-box",padding:"9px 12px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:13,background:"white"}}),L&&React.createElement("button",{onClick:()=>F(""),style:{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#a8a297",cursor:"pointer",fontSize:13}},"\u2715"),Ae&&Be.length>0&&React.createElement("div",{style:{position:"absolute",top:"100%",left:0,right:0,marginTop:4,background:"white",border:"1px solid #d8d2c5",borderRadius:4,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",zIndex:10,overflow:"hidden"}},Be.map(e=>React.createElement("div",{key:e,onMouseDown:()=>{W(t=>new Set(t).add(e)),F("")},style:{padding:"8px 12px",fontSize:13,cursor:"pointer"},onMouseEnter:t=>t.currentTarget.style.background="#eef4f1",onMouseLeave:t=>t.currentTarget.style.background="white"},e)))),N.size>0&&React.createElement("div",{className:"no-print",style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}},Array.from(N).map(e=>React.createElement("span",{key:e,style:{display:"inline-flex",alignItems:"center",gap:6,background:"#eef4f1",color:ACCENT,border:`1px solid ${ACCENT}`,borderRadius:999,padding:"4px 10px",fontSize:12}},e,React.createElement("button",{onClick:()=>{W(t=>{const o=new Set(t);return o.delete(e),o})},style:{background:"none",border:"none",color:ACCENT,cursor:"pointer",fontSize:12,lineHeight:1,padding:0}},"\u2715"))),React.createElement("button",{onClick:()=>W(new Set),style:{fontSize:12,color:"#a83232",background:"none",border:"none",cursor:"pointer"}},"\u3059\u3079\u3066\u89E3\u9664")),React.createElement("div",{className:"print-area",style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,overflowX:"auto",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}},React.createElement("table",{style:{borderCollapse:"collapse",width:"100%",fontSize:13}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#eef4f1"}},i.useDept&&React.createElement("th",{style:{...thStyle("left"),cursor:"pointer"},onClick:()=>le("dept")},"\u90E8\u9580",sortArrow(E,"dept")),React.createElement("th",{style:{...thStyle("left"),cursor:"pointer"},onClick:()=>le("menu")},"\u30E1\u30CB\u30E5\u30FC",sortArrow(E,"menu")),i.dates.map(e=>{const t=weekdayLabel(e),o=t==="\u65E5"?"#c0392b":t==="\u571F"?"#2f5f8f":"#8a8378";return React.createElement("th",{key:e,style:{...thStyle("right"),cursor:"pointer"},onClick:()=>le(e)},React.createElement("div",null,e,sortArrow(E,e)),t&&React.createElement("div",{style:{fontSize:10,fontWeight:400,color:o}},"(",t,")"))}),React.createElement("th",{style:{...thStyle("right"),borderLeft:`2px solid ${ACCENT}`,cursor:"pointer"},onClick:()=>le("total")},"\u5408\u8A08",sortArrow(E,"total")))),React.createElement("tbody",null,qe.map((e,t)=>{const o=i.rowInfo.get(e);return React.createElement("tr",{key:e,style:{background:t%2?"#fbfaf7":"white"}},i.useDept&&React.createElement("td",{style:tdStyle("left")},o.dept),React.createElement("td",{style:tdStyle("left")},o.menu),i.dates.map(r=>React.createElement("td",{key:r,className:"num",style:tdStyle("right")},i.matrix.get(e).get(r)||"")),React.createElement("td",{className:"num",style:{...tdStyle("right"),borderLeft:`2px solid ${ACCENT}`,fontWeight:700}},i.rowTotals.get(e)))}),React.createElement("tr",{style:{borderTop:`2px solid ${INK}`,fontWeight:700}},React.createElement("td",{style:tdStyle("left"),colSpan:i.useDept?2:1},"\u5408\u8A08"),i.colTotals.map((e,t)=>React.createElement("td",{key:t,className:"num",style:tdStyle("right")},e)),React.createElement("td",{className:"num",style:{...tdStyle("right"),borderLeft:`2px solid ${ACCENT}`}},i.grandTotal)),w&&React.createElement(React.Fragment,null,React.createElement("tr",{style:{background:"#f3f0e8"}},React.createElement("td",{style:{...tdStyle("left"),fontWeight:600,color:"#5a5347"},colSpan:i.useDept?2:1},"\u58F2\u4E0A"),i.dates.map(e=>{const t=V.get(e)?.revenue||0;return React.createElement("td",{key:e,className:"num",style:{...tdStyle("right"),color:"#5a5347"}},"\xA5",Math.round(t).toLocaleString())}),React.createElement("td",{className:"num",style:{...tdStyle("right"),borderLeft:`2px solid ${ACCENT}`,fontWeight:700}},"\xA5",Math.round(w.totalRevenue).toLocaleString())),React.createElement("tr",{style:{background:"#f3f0e8"}},React.createElement("td",{style:{...tdStyle("left"),fontWeight:600,color:"#5a5347"},colSpan:i.useDept?2:1},"\u5BA2\u6570"),i.dates.map(e=>{const t=V.get(e)?.customers||0;return React.createElement("td",{key:e,className:"num",style:{...tdStyle("right"),color:"#5a5347"}},t)}),React.createElement("td",{className:"num",style:{...tdStyle("right"),borderLeft:`2px solid ${ACCENT}`,fontWeight:700}},w.totalCustomers))))))),K==="analysis"&&A&&React.createElement("div",{className:"print-area",style:{display:"flex",flexDirection:"column",gap:20}},React.createElement("div",{className:"no-print",style:{position:"relative"}},React.createElement("input",{type:"text",value:L,onChange:e=>F(e.target.value),onFocus:()=>be(!0),onBlur:()=>setTimeout(()=>be(!1),120),placeholder:"\u30E1\u30CB\u30E5\u30FC\u540D\u3067\u691C\u7D22\u30FB\u8907\u6570\u9078\u629E\u3067\u304D\u307E\u3059(\u69CB\u6210\u6BD4\u30FB\u9078\u629E\u98DF\u6570\u306E\u5019\u88DC\u3092\u7D5E\u308A\u8FBC\u307F\u307E\u3059)",style:{width:"100%",boxSizing:"border-box",padding:"9px 12px",border:"1px solid #d8d2c5",borderRadius:4,fontSize:13,background:"white"}}),L&&React.createElement("button",{onClick:()=>F(""),style:{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#a8a297",cursor:"pointer",fontSize:13}},"\u2715"),$e&&Le.length>0&&React.createElement("div",{style:{position:"absolute",top:"100%",left:0,right:0,marginTop:4,background:"white",border:"1px solid #d8d2c5",borderRadius:4,boxShadow:"0 2px 8px rgba(0,0,0,0.08)",zIndex:10,overflow:"hidden"}},Le.map(e=>React.createElement("div",{key:e,onMouseDown:()=>{W(t=>new Set(t).add(e)),F("")},style:{padding:"8px 12px",fontSize:13,cursor:"pointer"},onMouseEnter:t=>t.currentTarget.style.background="#eef4f1",onMouseLeave:t=>t.currentTarget.style.background="white"},e)))),N.size>0&&React.createElement("div",{className:"no-print",style:{display:"flex",flexWrap:"wrap",gap:6,marginTop:-10}},Array.from(N).map(e=>React.createElement("span",{key:e,style:{display:"inline-flex",alignItems:"center",gap:6,background:"#eef4f1",color:ACCENT,border:`1px solid ${ACCENT}`,borderRadius:999,padding:"4px 10px",fontSize:12}},e,React.createElement("button",{onClick:()=>{W(t=>{const o=new Set(t);return o.delete(e),o})},style:{background:"none",border:"none",color:ACCENT,cursor:"pointer",fontSize:12,lineHeight:1,padding:0}},"\u2715"))),React.createElement("button",{onClick:()=>W(new Set),style:{fontSize:12,color:"#a83232",background:"none",border:"none",cursor:"pointer"}},"\u3059\u3079\u3066\u89E3\u9664")),React.createElement(ChartCard,{title:"\u65E5\u5225\u63A8\u79FB"},React.createElement("div",{style:{fontSize:11,color:"#a8a297",marginBottom:6}},"\u25CF \u8D64\u3044\u70B9\u306F\u5E73\u5747\u304B\u3089\u5927\u304D\u304F\u5916\u308C\u305F\u65E5(\u7570\u5E38\u5024\u306E\u76EE\u5B89)\u3067\u3059"),React.createElement(ResponsiveContainer,{width:"100%",height:220},React.createElement(LineChart,{data:A.dailyTrend,margin:{top:8,right:12,left:-10,bottom:0}},React.createElement(CartesianGrid,{stroke:"#e5e0d5",strokeDasharray:"3 3"}),React.createElement(XAxis,{dataKey:"label",tick:{fontSize:11,fill:"#8a8378"}}),React.createElement(YAxis,{tick:{fontSize:11,fill:"#8a8378"},allowDecimals:!1}),React.createElement(Tooltip,{formatter:e=>[e,"\u5408\u8A08\u51FA\u6570"],labelFormatter:(e,t)=>`${t?.[0]?.payload?.date??e}${t?.[0]?.payload?.weekday?`(${t[0].payload.weekday})`:""}${t?.[0]?.payload?.isAnomaly?"(\u7570\u5E38\u5024)":""}`,contentStyle:{fontSize:12,borderRadius:4}}),React.createElement(Line,{type:"monotone",dataKey:"total",stroke:ACCENT,strokeWidth:2,dot:e=>{const{cx:t,cy:o,payload:r,index:d}=e;return r.isAnomaly?React.createElement("circle",{key:d,cx:t,cy:o,r:5,fill:"#c0392b",stroke:"white",strokeWidth:1.5}):React.createElement("circle",{key:d,cx:t,cy:o,r:2,fill:ACCENT})}})))),React.createElement(ChartCard,{title:"\u66DC\u65E5\u5225\u306E\u50BE\u5411(1\u65E5\u3042\u305F\u308A\u5E73\u5747\u51FA\u6570)"},React.createElement("div",{style:{fontSize:13,color:"#8a8378",marginBottom:8}},"\u5E73\u65E5\u5E73\u5747 ",React.createElement("b",{className:"num",style:{color:INK}},A.weekdayAvg.toFixed(1)),"\u3000","\u571F\u65E5\u5E73\u5747 ",React.createElement("b",{className:"num",style:{color:INK}},A.weekendAvg.toFixed(1)),A.weekdayAvg>0&&React.createElement("span",{style:{marginLeft:8,color:A.weekendAvg>=A.weekdayAvg?"#2f6f62":"#a83232"}},"(\u571F\u65E5\u306F\u5E73\u65E5\u6BD4 ",((A.weekendAvg/A.weekdayAvg-1)*100).toFixed(0),"%)")),React.createElement(ResponsiveContainer,{width:"100%",height:200},React.createElement(BarChart,{data:A.weekdayChart,margin:{top:8,right:12,left:-10,bottom:0}},React.createElement(CartesianGrid,{stroke:"#e5e0d5",strokeDasharray:"3 3"}),React.createElement(XAxis,{dataKey:"weekday",tick:{fontSize:12,fill:"#8a8378"}}),React.createElement(YAxis,{tick:{fontSize:11,fill:"#8a8378"},allowDecimals:!1}),React.createElement(Tooltip,{formatter:e=>[e,"\u5E73\u5747\u51FA\u6570"],contentStyle:{fontSize:12,borderRadius:4}}),React.createElement(Bar,{dataKey:"average",radius:[3,3,0,0]},A.weekdayChart.map((e,t)=>React.createElement(Cell,{key:t,fill:e.weekday==="\u571F"?"#2f5f8f":e.weekday==="\u65E5"?"#c0392b":ACCENT})))))),React.createElement(ChartCard,{title:"\u30E1\u30CB\u30E5\u30FC\u5225\u69CB\u6210\u6BD4(\u51FA\u6570)",collapsible:!0,defaultOpen:!1,forceOpen:ge},React.createElement("div",null,A.menuRanking.filter(e=>fe(e.menu)).map((e,t)=>React.createElement("div",{key:e.menu,style:{display:"flex",alignItems:"center",gap:10,marginBottom:10}},React.createElement("div",{style:{width:22,fontSize:12,color:"#a8a297",flexShrink:0}},t+1),React.createElement("div",{style:{width:110,fontSize:13,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},e.menu),React.createElement("div",{style:{flex:1,background:"#eee9dd",borderRadius:3,height:14,position:"relative"}},React.createElement("div",{style:{width:`${e.pct}%`,background:t===0?ACCENT:"#8fb3aa",height:"100%",borderRadius:3}})),React.createElement("div",{className:"num",style:{width:70,fontSize:12,textAlign:"right",flexShrink:0,color:"#5a5347"}},e.total,"(",e.pct.toFixed(1),"%)"))))),w&&React.createElement(ChartCard,{title:"\u58F2\u4E0A\u69CB\u6210\u6BD4(\u30E1\u30CB\u30E5\u30FC\u5225)",collapsible:!0,defaultOpen:!1,forceOpen:ge},React.createElement("div",null,w.menuRevenueRanking.filter(e=>fe(e.menu)).map((e,t)=>React.createElement("div",{key:e.menu,style:{display:"flex",alignItems:"center",gap:10,marginBottom:10}},React.createElement("div",{style:{width:22,fontSize:12,color:"#a8a297",flexShrink:0}},t+1),React.createElement("div",{style:{width:110,fontSize:13,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},e.menu),React.createElement("div",{style:{flex:1,background:"#eee9dd",borderRadius:3,height:14,position:"relative"}},React.createElement("div",{style:{width:`${e.pct}%`,background:t===0?"#c9822a":"#e0bd8f",height:"100%",borderRadius:3}})),React.createElement("div",{className:"num",style:{width:100,fontSize:12,textAlign:"right",flexShrink:0,color:"#5a5347"}},"\xA5",Math.round(e.total).toLocaleString(),"(",e.pct.toFixed(1),"%)"))))),w&&w.totalCustomers>0&&React.createElement(ChartCard,{title:"\u9078\u629E\u98DF\u6570(\u5BA2\u6570100\u4EBA\u3042\u305F\u308A\u306E\u6CE8\u6587\u6570)",collapsible:!0,defaultOpen:!1,forceOpen:ge},React.createElement("div",{style:{fontSize:12,color:"#8a8378",marginBottom:10}},"\u5BA2\u6570 ",React.createElement("b",{className:"num",style:{color:INK}},w.totalCustomers),"\u4EBA\u306B\u5BFE\u3059\u308B\u3001\u30E1\u30CB\u30E5\u30FC\u3054\u3068\u306E\u51FA\u6570\u306E\u5272\u5408\u3067\u3059\u3002"),React.createElement("div",{style:{overflowX:"auto"}},React.createElement("table",{style:{borderCollapse:"collapse",width:"100%",fontSize:13}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#eef4f1"}},React.createElement("th",{style:thStyle("left")},"\u30E1\u30CB\u30E5\u30FC"),React.createElement("th",{style:thStyle("right")},"\u51FA\u6570"),React.createElement("th",{style:thStyle("right")},"\u9078\u629E\u98DF\u6570"))),React.createElement("tbody",null,A.menuRanking.filter(e=>fe(e.menu)).map((e,t)=>React.createElement("tr",{key:e.menu,style:{background:t%2?"#fbfaf7":"white"}},React.createElement("td",{style:tdStyle("left")},e.menu),React.createElement("td",{className:"num",style:tdStyle("right")},e.total),React.createElement("td",{className:"num",style:{...tdStyle("right"),fontWeight:700,color:ACCENT}},(e.total/w.totalCustomers*100).toFixed(1)))))))),w&&React.createElement(ChartCard,{title:"\u5BA2\u6570\u69CB\u6210\u6BD4(\u304A\u901A\u3057 / \u304A\u5B50\u69D8\u98F2\u307F\u653E\u984C)"},React.createElement("div",null,w.customerBreakdown.map((e,t)=>React.createElement("div",{key:e.label,style:{display:"flex",alignItems:"center",gap:10,marginBottom:10}},React.createElement("div",{style:{width:130,fontSize:13,flexShrink:0}},e.label),React.createElement("div",{style:{flex:1,background:"#eee9dd",borderRadius:3,height:14,position:"relative"}},React.createElement("div",{style:{width:`${e.pct}%`,background:t===0?ACCENT:"#2f5f8f",height:"100%",borderRadius:3}})),React.createElement("div",{className:"num",style:{width:90,fontSize:12,textAlign:"right",flexShrink:0,color:"#5a5347"}},e.value,"\u4EBA(",e.pct.toFixed(1),"%)")))))),K==="sales"&&w&&React.createElement("div",{className:"print-area",style:{display:"flex",flexDirection:"column",gap:20}},React.createElement("div",{style:{display:"flex",gap:12,flexWrap:"wrap"}},React.createElement(KpiCard,{label:"\u7DCF\u58F2\u4E0A",value:`\xA5${Math.round(w.totalRevenue).toLocaleString()}`}),React.createElement(KpiCard,{label:"\u7DCF\u5BA2\u6570",value:`${w.totalCustomers.toLocaleString()}\u4EBA`}),React.createElement(KpiCard,{label:"\u5BA2\u5358\u4FA1",value:`\xA5${Math.round(w.avgSpend).toLocaleString()}`})),React.createElement(ChartCard,{title:"\u58F2\u4E0A\u63A8\u79FB"},React.createElement(ResponsiveContainer,{width:"100%",height:220},React.createElement(LineChart,{data:w.daily,margin:{top:8,right:12,left:-10,bottom:0}},React.createElement(CartesianGrid,{stroke:"#e5e0d5",strokeDasharray:"3 3"}),React.createElement(XAxis,{dataKey:"date",tick:{fontSize:10,fill:"#8a8378"},tickFormatter:e=>e.length>5?e.slice(5):e}),React.createElement(YAxis,{tick:{fontSize:11,fill:"#8a8378"}}),React.createElement(Tooltip,{formatter:(e,t)=>[t==="revenue"?`\xA5${Math.round(e).toLocaleString()}`:e,t==="revenue"?"\u58F2\u4E0A":t],labelFormatter:(e,t)=>`${e}${t?.[0]?.payload?.weekday?`(${t[0].payload.weekday})`:""}`,contentStyle:{fontSize:12,borderRadius:4}}),React.createElement(Line,{type:"monotone",dataKey:"revenue",stroke:ACCENT,strokeWidth:2,dot:{r:2}})))),React.createElement(ChartCard,{title:"\u65E5\u5225 \u58F2\u4E0A\u30FB\u5BA2\u6570"},React.createElement("div",{style:{overflowX:"auto"}},React.createElement("table",{style:{borderCollapse:"collapse",width:"100%",fontSize:13}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#eef4f1"}},React.createElement("th",{style:thStyle("left")},"\u65E5\u4ED8"),React.createElement("th",{style:thStyle("right")},"\u58F2\u4E0A"),React.createElement("th",{style:thStyle("right")},"\u5BA2\u6570"),React.createElement("th",{style:thStyle("right")},"\u5BA2\u5358\u4FA1"))),React.createElement("tbody",null,w.daily.map((e,t)=>React.createElement("tr",{key:e.date,style:{background:t%2?"#fbfaf7":"white"}},React.createElement("td",{style:tdStyle("left")},e.date,e.weekday&&React.createElement("span",{style:{fontSize:11,color:e.weekday==="\u65E5"?"#c0392b":e.weekday==="\u571F"?"#2f5f8f":"#8a8378"}}," (",e.weekday,")")),React.createElement("td",{className:"num",style:tdStyle("right")},"\xA5",Math.round(e.revenue).toLocaleString()),React.createElement("td",{className:"num",style:tdStyle("right")},e.customers),React.createElement("td",{className:"num",style:tdStyle("right")},"\xA5",Math.round(e.avgSpend).toLocaleString()))),React.createElement("tr",{style:{borderTop:`2px solid ${INK}`,fontWeight:700}},React.createElement("td",{style:tdStyle("left")},"\u5408\u8A08"),React.createElement("td",{className:"num",style:tdStyle("right")},"\xA5",Math.round(w.totalRevenue).toLocaleString()),React.createElement("td",{className:"num",style:tdStyle("right")},w.totalCustomers),React.createElement("td",{className:"num",style:tdStyle("right")},"\xA5",Math.round(w.avgSpend).toLocaleString()))))))),K==="compare"&&P&&React.createElement("div",{className:"print-area",style:{display:"flex",flexDirection:"column",gap:20}},React.createElement(ChartCard,{title:"\u671F\u9593\u6BD4\u8F03(\u524D\u534A \xD7 \u5F8C\u534A)"},React.createElement("div",{style:{fontSize:12,color:"#8a8378",marginBottom:12}},"\u524D\u534A: ",P.firstRange,"(",P.firstDays,"\u65E5\u9593) / \u5F8C\u534A: ",P.secondRange,"(",P.secondDays,"\u65E5\u9593)"),React.createElement("div",{style:{overflowX:"auto"}},React.createElement("table",{style:{borderCollapse:"collapse",width:"100%",fontSize:13}},React.createElement("thead",null,React.createElement("tr",{style:{background:"#eef4f1"}},React.createElement("th",{style:thStyle("left")},"\u6307\u6A19"),React.createElement("th",{style:thStyle("right")},"\u524D\u534A"),React.createElement("th",{style:thStyle("right")},"\u5F8C\u534A"),React.createElement("th",{style:thStyle("right")},"\u5897\u6E1B"),React.createElement("th",{style:thStyle("right")},"\u5897\u6E1B\u7387"))),React.createElement("tbody",null,P.rows.map(e=>{const t=e.second-e.first,o=e.first?t/e.first*100:null,r=d=>e.fmt==="yen"?`\xA5${Math.round(d).toLocaleString()}`:Math.round(d).toLocaleString();return React.createElement("tr",{key:e.label},React.createElement("td",{style:tdStyle("left")},e.label),React.createElement("td",{className:"num",style:tdStyle("right")},r(e.first)),React.createElement("td",{className:"num",style:tdStyle("right")},r(e.second)),React.createElement("td",{className:"num",style:{...tdStyle("right"),color:t>0?ACCENT:t<0?"#a83232":"#5a5347",fontWeight:700}},t>0?"+":"",r(t)),React.createElement("td",{className:"num",style:{...tdStyle("right"),color:t>0?ACCENT:t<0?"#a83232":"#5a5347"}},o===null?"\u2014":`${o>0?"+":""}${o.toFixed(1)}%`))})))))))))}function KpiCard({label:n,value:a}){return React.createElement("div",{style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:"14px 20px",flex:"1 1 140px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}},React.createElement("div",{style:{fontSize:12,color:"#8a8378",marginBottom:4}},n),React.createElement("div",{className:"num",style:{fontSize:20,fontWeight:700,color:"#1c2b2a"}},a))}function ChartCard({title:n,children:a,collapsible:b=!1,defaultOpen:C=!0,forceOpen:R=!1}){const[I,f]=useState(C),B=R||I;return React.createElement("div",{style:{background:"white",border:"1px solid #e5e0d5",borderRadius:4,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}},React.createElement("div",{onClick:b&&!R?()=>f($=>!$):void 0,style:{fontSize:13,fontWeight:700,color:"#1c2b2a",marginBottom:b&&!B?0:8,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:b&&!R?"pointer":"default"}},n,b&&(B?React.createElement(ChevronUp,{size:16,color:"#8a8378"}):React.createElement(ChevronDown,{size:16,color:"#8a8378"}))),(!b||B)&&a)}function sortArrow(n,a){return n.col!==a?"":n.dir==="asc"?" \u25B2":" \u25BC"}function tabStyle(n){return{padding:"8px 16px",borderRadius:4,border:n?"1px solid #2f6f62":"1px solid #d8d2c5",background:n?"#eef4f1":"white",color:n?"#2f6f62":"#8a8378",fontWeight:600,fontSize:13,cursor:"pointer"}}function btnStyle(n,a,b){return{display:"flex",alignItems:"center",gap:6,background:n,color:a,border:b||"none",padding:"10px 18px",borderRadius:4,fontWeight:600,cursor:"pointer",fontSize:14}}function thStyle(n){return{padding:"10px 14px",textAlign:n,fontWeight:700,whiteSpace:"nowrap",borderBottom:"1px solid #d8e4df"}}function tdStyle(n){return{padding:"8px 14px",textAlign:n,whiteSpace:"nowrap"}}const root=ReactDOM.createRoot(document.getElementById("menuTallyRoot"));root.render(React.createElement(MenuTallyApp,null));
+}
+
 })();
 </script>
 </body>
